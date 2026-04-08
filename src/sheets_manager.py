@@ -86,32 +86,27 @@ class SheetsManager:
 
     def _get_or_create_master(self) -> gspread.Spreadsheet:
         """마스터 스프레드시트를 찾아 반환합니다.
-        사용자가 미리 만들어 둔 시트를 ID 또는 이름으로 검색합니다."""
+        MASTER_SPREADSHEET_ID가 설정된 경우 Sheets API(open_by_key)만 사용합니다.
+        → Drive API를 호출하지 않으므로 서비스 계정 quota 문제가 발생하지 않습니다."""
         if self._master:
             return self._master
 
-        # 1) Secrets/환경변수에 설정된 ID로 열기
+        # 1) Secrets/환경변수에 설정된 ID로 열기 (Sheets API만 사용 — Drive API 무관)
         master_id = get_master_spreadsheet_id()
         if master_id:
-            try:
-                self._master = self._gc.open_by_key(master_id)
-                return self._master
-            except Exception:
-                pass
+            self._master = self._gc.open_by_key(master_id.strip())
+            return self._master
 
-        # 2) 이름으로 열기
+        # 2) ID 미설정 시 이름으로 검색 (Drive API 사용 — quota 오류 가능)
         try:
             self._master = self._gc.open(MASTER_SHEET_NAME)
             return self._master
-        except gspread.SpreadsheetNotFound:
-            pass
-
-        # 3) 못 찾으면 안내
-        raise RuntimeError(
-            "마스터 스프레드시트를 찾을 수 없습니다. "
-            "Google Drive 공유 폴더에 'Store-Pickaxe-Master'라는 "
-            "빈 Google Sheets 파일을 만들어 주세요."
-        )
+        except Exception as e:
+            raise RuntimeError(
+                "마스터 스프레드시트를 열 수 없습니다. "
+                "Streamlit Secrets에 MASTER_SPREADSHEET_ID를 설정해 주세요. "
+                f"(원본 오류: {e})"
+            ) from e
 
     def _get_master_ws(self) -> gspread.Worksheet:
         ss = self._get_or_create_master()
