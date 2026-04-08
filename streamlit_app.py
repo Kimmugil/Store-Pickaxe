@@ -42,11 +42,9 @@ p,span,label,div{color:#1E1E1E;}
 .stButton>button[kind="primary"],.stButton>button[data-testid="baseButton-primary"],[data-testid="baseButton-primary"]{background:#1E1E1E!important;color:#FFFFFF!important;}
 .stButton>button[kind="primary"] p,.stButton>button[data-testid="baseButton-primary"] p,[data-testid="baseButton-primary"] p{color:#FFFFFF!important;}
 .stButton>button[kind="primary"]:hover,[data-testid="baseButton-primary"]:hover{background:#444444!important;}
-/* 검색 결과 카드: stHorizontalBlock 전체를 카드로 */
-div[data-testid="stHorizontalBlock"]:has(.search-card-info){background:#FFFFFF;border:1.5px solid #1E1E1E;border-radius:20px;margin-bottom:12px;overflow:hidden;}
-.search-card-info{padding:16px 8px 16px 20px;}
-div[data-testid="stHorizontalBlock"]:has(.search-card-info)>div[data-testid="stColumn"]:last-child{display:flex!important;align-items:center!important;justify-content:flex-end!important;padding:12px 20px 12px 8px!important;}
-div[data-testid="stHorizontalBlock"]:has(.search-card-info) div[data-testid="stColumn"]:last-child .stButton>button{border-radius:20px!important;padding:8px 18px!important;font-size:13px!important;white-space:nowrap!important;width:auto!important;}
+/* 검색 결과 그리드 카드 */
+.grid-card{background:#FFFFFF;border:1.5px solid #1E1E1E;border-radius:20px 20px 0 0;border-bottom:none;padding:16px 16px 14px;}
+div[data-testid="stColumn"]:has(.grid-card) .stButton>button{border-radius:0 0 20px 20px!important;border:1.5px solid #1E1E1E!important;border-top:none!important;margin-top:0!important;}
 .stTabs [data-baseweb="tab-list"]{background:transparent;border-bottom:1.5px solid #1E1E1E;}
 .stTabs [data-baseweb="tab"]{border-radius:20px 20px 0 0!important;border:1.5px solid transparent!important;font-weight:600;color:#1E1E1E!important;}
 .stTabs [aria-selected="true"]{border:1.5px solid #1E1E1E!important;border-bottom:1.5px solid #FFFFFF!important;background:#FFFFFF!important;}
@@ -313,8 +311,8 @@ def render_search():
     st.markdown(
         '<div style="background:#FFFFFF;border:1.5px solid #1E1E1E;border-radius:20px;padding:14px 20px;margin-bottom:20px;">'
         '<p style="font-size:13px;color:#757575;margin:0;word-break:keep-all;">'
-        '앱 이름이 스토어마다 다르거나 검색 결과가 적을 경우, 실제로 양쪽 스토어에 있는 앱이 <b style="color:#1E1E1E;">애플 미확인</b>으로 표시될 수 있어요. '
-        '이 경우 <b style="color:#1E1E1E;">분석 시작 →</b> 단계에서 앱스토어 URL 또는 앱 ID를 직접 입력해 연결할 수 있어요.'
+        '💡 앱 이름이 스토어마다 다르거나 검색 결과가 적으면, 실제로 두 스토어에 모두 있는 앱이 <b style="color:#1E1E1E;">미확인</b>으로 표시될 수 있어요. '
+        '<b style="color:#1E1E1E;">분석 시작 →</b> 단계에서 구글 패키지명 또는 앱스토어 URL/ID를 직접 입력해 연결할 수 있어요.'
         '</p>'
         '</div>',
         unsafe_allow_html=True,
@@ -331,58 +329,64 @@ def render_search():
         except Exception:
             pass
 
-    for item in merged:
-        g = item.get("google")
-        a = item.get("apple")
-        display_name = (g or a or {}).get("app_name", "알 수 없음")
-        developer = (g or a or {}).get("developer", "")
-        icon_url = (g or a or {}).get("icon_url", "")
+    # 3컬럼 그리드로 렌더링
+    N_COLS = 3
+    for row_start in range(0, len(merged), N_COLS):
+        row_items = merged[row_start:row_start + N_COLS]
+        grid_cols = st.columns(N_COLS, gap="medium")
+        for col, item in zip(grid_cols, row_items):
+            g = item.get("google")
+            a = item.get("apple")
+            display_name = (g or a or {}).get("app_name", "알 수 없음")
+            developer = (g or a or {}).get("developer", "")
+            icon_url = (g or a or {}).get("icon_url", "")
 
-        g_rating = g.get("rating") if g else None
-        a_rating = a.get("rating") if a else None
-        g_color, g_bg = rating_color(g_rating)
-        a_color, a_bg = rating_color(a_rating)
-        g_badge = badge(f"구글 {g_rating:.1f}★", g_color, g_bg) if g_rating else badge("구글 미확인", "#AAAAAA", "#F4F5F7")
-        a_badge = badge(f"애플 {a_rating:.1f}★", a_color, a_bg) if a_rating else badge("애플 미확인", "#AAAAAA", "#F4F5F7")
+            g_rating = g.get("rating") if g else None
+            a_rating = a.get("rating") if a else None
+            g_color, g_bg = rating_color(g_rating)
+            a_color, a_bg = rating_color(a_rating)
+            g_badge = badge(f"구글 {g_rating:.1f}★", g_color, g_bg) if g_rating else badge("구글 미확인", "#AAAAAA", "#F4F5F7")
+            a_badge = badge(f"애플 {a_rating:.1f}★", a_color, a_bg) if a_rating else badge("애플 미확인", "#AAAAAA", "#F4F5F7")
 
-        icon_html = (
-            f'<img src="{icon_url}" width="52" height="52" style="border-radius:14px;border:1.5px solid #E8E8E8;flex-shrink:0;" />'
-            if icon_url else
-            '<div style="width:52px;height:52px;border-radius:14px;border:1.5px solid #1E1E1E;background:#F4F5F7;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">📱</div>'
-        )
-
-        app_key = _make_app_key(display_name, developer)
-        col_info, col_btn = st.columns([6, 1], gap="small")
-        with col_info:
-            st.markdown(
-                f'<div class="search-card-info" style="display:flex;align-items:center;gap:16px;">'
-                f'{icon_html}'
-                f'<div style="flex:1;min-width:0;">'
-                f'<p style="font-weight:700;font-size:15px;margin:0 0 2px;word-break:keep-all;">{display_name}</p>'
-                f'<p style="font-size:12px;color:#757575;margin:0 0 8px;">{developer}</p>'
-                f'<div>{g_badge}{a_badge}</div>'
-                f'</div>'
-                f'</div>',
-                unsafe_allow_html=True,
+            icon_html = (
+                f'<img src="{icon_url}" width="48" height="48" style="border-radius:12px;border:1.5px solid #E8E8E8;flex-shrink:0;" />'
+                if icon_url else
+                '<div style="width:48px;height:48px;border-radius:12px;border:1.5px solid #1E1E1E;background:#F4F5F7;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📱</div>'
             )
-        with col_btn:
-            if app_key in registered_keys:
-                if st.button("확인 →", key=f"search_view_{app_key}"):
-                    meta = sheets.get_app_by_key(app_key)
-                    go_detail(app_key, meta or {})
-                    st.rerun()
-            else:
-                if st.button("분석 시작 →", key=f"search_start_{app_key}", type="primary"):
-                    st.session_state.pending_register = {
-                        "app_key": app_key,
-                        "app_name": display_name,
-                        "developer": developer,
-                        "icon_url": icon_url,
-                        "google": g,
-                        "apple": a,
-                    }
-                    st.session_state.page = "register"
-                    st.rerun()
+            app_key = _make_app_key(display_name, developer)
+
+            with col:
+                st.markdown(
+                    f'<div class="grid-card">'
+                    f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">'
+                    f'{icon_html}'
+                    f'<div style="flex:1;min-width:0;">'
+                    f'<p style="font-weight:700;font-size:14px;margin:0 0 2px;word-break:keep-all;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{display_name}</p>'
+                    f'<p style="font-size:12px;color:#757575;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{developer}</p>'
+                    f'</div>'
+                    f'</div>'
+                    f'<div style="display:flex;flex-wrap:wrap;gap:4px;">{g_badge}{a_badge}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                if app_key in registered_keys:
+                    if st.button("분석 확인 →", key=f"search_view_{app_key}", use_container_width=True):
+                        meta = sheets.get_app_by_key(app_key)
+                        go_detail(app_key, meta or {})
+                        st.rerun()
+                else:
+                    if st.button("분석 시작 →", key=f"search_start_{app_key}", use_container_width=True, type="primary"):
+                        st.session_state.pending_register = {
+                            "app_key": app_key,
+                            "app_name": display_name,
+                            "developer": developer,
+                            "icon_url": icon_url,
+                            "google": g,
+                            "apple": a,
+                        }
+                        st.session_state.page = "register"
+                        st.rerun()
+        st.markdown('<div style="height:4px;"></div>', unsafe_allow_html=True)
 
 
 def _do_search(query: str) -> list[dict]:
