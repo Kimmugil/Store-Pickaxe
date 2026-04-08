@@ -5,7 +5,7 @@ Gemini AI 분석 엔진.
 import json
 import re
 
-import google.generativeai as genai
+from google import genai
 
 from src.config import get_gemini_api_key
 
@@ -13,11 +13,11 @@ MODEL_NAME = "gemini-2.5-flash"
 REVIEW_SAMPLE_SIZE = 150  # 플랫폼당 최대 분석 리뷰 수
 
 
-def _configure():
+def _get_client() -> genai.Client:
     api_key = get_gemini_api_key()
     if not api_key:
         raise RuntimeError("Gemini API 키가 설정되지 않았습니다.")
-    genai.configure(api_key=api_key)
+    return genai.Client(api_key=api_key)
 
 
 def _sample_reviews(reviews: list[dict], n: int) -> list[dict]:
@@ -47,8 +47,7 @@ def _format_reviews_for_prompt(reviews: list[dict], platform: str) -> str:
 
 class StoreAnalyzer:
     def __init__(self):
-        _configure()
-        self._model = genai.GenerativeModel(MODEL_NAME)
+        self._client = _get_client()
 
     # ------------------------------------------------------------------ #
     #  전체 앱 분석
@@ -98,7 +97,7 @@ class StoreAnalyzer:
 }}
 """
 
-        response = self._model.generate_content(prompt)
+        response = self._client.models.generate_content(model=MODEL_NAME, contents=prompt)
         raw_text = response.text.strip()
 
         parsed = self._parse_json_response(raw_text)
@@ -143,7 +142,7 @@ class StoreAnalyzer:
   "key_issues": ["핵심 이슈1", "이슈2", "이슈3"]
 }}
 """
-        response = self._model.generate_content(prompt)
+        response = self._client.models.generate_content(model=MODEL_NAME, contents=prompt)
         return self._parse_json_response(response.text.strip())
 
     # ------------------------------------------------------------------ #
