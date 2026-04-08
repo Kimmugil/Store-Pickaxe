@@ -42,7 +42,7 @@ def get_google_credentials():
         from google.oauth2.service_account import Credentials
 
         scopes = [
-            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive",
         ]
 
@@ -59,7 +59,7 @@ def get_google_credentials():
         from google.oauth2.service_account import Credentials
 
         scopes = [
-            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive",
         ]
         info = json.loads(json_str)
