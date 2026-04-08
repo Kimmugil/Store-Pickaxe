@@ -444,11 +444,12 @@ def render_register():
     with col1:
         if g:
             g_color, g_bg = rating_color(g.get("rating"))
+            g_rating_str = f"{float(g['rating']):.1f}★" if g.get("rating") is not None else "?★"
             card(
                 f'<p style="font-size:12px;font-weight:700;color:#757575;letter-spacing:0.7px;margin-bottom:8px;">구글 플레이</p>'
                 f'<p style="font-weight:700;font-size:15px;margin:0 0 4px;">{g.get("app_name","")}</p>'
                 f'<p style="font-size:12px;color:#757575;margin:0 0 8px;">{g.get("developer","")}</p>'
-                f'<p style="font-size:13px;margin:0;word-break:keep-all;">{badge(f"{g.get(\"rating\",\"?\"):.1f}★", g_color, g_bg)} {badge(g.get("genre",""), "#757575", "#F4F5F7")}</p>'
+                f'<p style="font-size:13px;margin:0;word-break:keep-all;">{badge(g_rating_str, g_color, g_bg)} {badge(g.get("genre",""), "#757575", "#F4F5F7")}</p>'
             )
         else:
             card('<p style="color:#757575;font-size:13px;text-align:center;">구글 플레이에 없는 앱입니다.</p>')
@@ -456,11 +457,12 @@ def render_register():
     with col2:
         if a:
             a_color, a_bg = rating_color(a.get("rating"))
+            a_rating_str = f"{float(a['rating']):.1f}★" if a.get("rating") is not None else "?★"
             card(
                 f'<p style="font-size:12px;font-weight:700;color:#757575;letter-spacing:0.7px;margin-bottom:8px;">애플 앱스토어</p>'
                 f'<p style="font-weight:700;font-size:15px;margin:0 0 4px;">{a.get("app_name","")}</p>'
                 f'<p style="font-size:12px;color:#757575;margin:0 0 8px;">{a.get("developer","")}</p>'
-                f'<p style="font-size:13px;margin:0;">{badge(f"{a.get(\"rating\",\"?\"):.1f}★", a_color, a_bg)} {badge(a.get("genre",""), "#757575", "#F4F5F7")}</p>'
+                f'<p style="font-size:13px;margin:0;">{badge(a_rating_str, a_color, a_bg)} {badge(a.get("genre",""), "#757575", "#F4F5F7")}</p>'
             )
         else:
             card('<p style="color:#757575;font-size:13px;text-align:center;">앱스토어에 없는 앱입니다.</p>')
