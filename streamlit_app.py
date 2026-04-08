@@ -36,9 +36,12 @@ p,span,label,div{color:#1E1E1E;}
 .stTextInput>div>div>input:focus{outline:none!important;box-shadow:none!important;}
 .stTextInput>div>div:focus-within{border-color:#1E1E1E!important;box-shadow:none!important;}
 .stButton>button{border:1.5px solid #1E1E1E!important;border-radius:20px!important;background:#FFFFFF!important;color:#1E1E1E!important;font-weight:600!important;padding:8px 20px!important;box-shadow:none!important;}
+.stButton>button p{color:#1E1E1E!important;}
 .stButton>button:hover{background:#1E1E1E!important;color:#FFFFFF!important;}
-.stButton>button[kind="primary"]{background:#1E1E1E!important;color:#FFFFFF!important;}
-.stButton>button[kind="primary"]:hover{background:#444444!important;}
+.stButton>button:hover p{color:#FFFFFF!important;}
+.stButton>button[kind="primary"],.stButton>button[data-testid="baseButton-primary"],[data-testid="baseButton-primary"]{background:#1E1E1E!important;color:#FFFFFF!important;}
+.stButton>button[kind="primary"] p,.stButton>button[data-testid="baseButton-primary"] p,[data-testid="baseButton-primary"] p{color:#FFFFFF!important;}
+.stButton>button[kind="primary"]:hover,[data-testid="baseButton-primary"]:hover{background:#444444!important;}
 .stTabs [data-baseweb="tab-list"]{background:transparent;border-bottom:1.5px solid #1E1E1E;}
 .stTabs [data-baseweb="tab"]{border-radius:20px 20px 0 0!important;border:1.5px solid transparent!important;font-weight:600;color:#1E1E1E!important;}
 .stTabs [aria-selected="true"]{border:1.5px solid #1E1E1E!important;border-bottom:1.5px solid #FFFFFF!important;background:#FFFFFF!important;}
