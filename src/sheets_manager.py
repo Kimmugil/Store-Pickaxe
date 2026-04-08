@@ -72,9 +72,47 @@ class SheetsManager:
     #  내부 헬퍼
     # ------------------------------------------------------------------ #
 
+    def _purge_root_files(self) -> None:
+        """서비스 계정 Drive 루트의 고아 파일을 영구 삭제해 quota를 확보합니다.
+        마스터 시트와 등록된 앱 스프레드시트는 보호합니다."""
+        protected_ids: set[str] = set()
+        try:
+            master = self._gc.open(MASTER_SHEET_NAME)
+            protected_ids.add(master.id)
+            for app in master.worksheet(MASTER_WORKSHEET).get_all_records():
+                if sid := app.get("spreadsheet_id"):
+                    protected_ids.add(sid)
+        except Exception:
+            pass  # 마스터가 없으면 보호 목록 없이 진행
+
+        try:
+            resp = self._gc.http_client.request(
+                "get",
+                "https://www.googleapis.com/drive/v3/files",
+                params={
+                    "q": "'root' in parents and trashed=false",
+                    "fields": "files(id,name)",
+                    "pageSize": "100",
+                },
+            )
+            for f in resp.json().get("files", []):
+                if f["id"] in protected_ids:
+                    continue
+                try:
+                    self._gc.http_client.request(
+                        "delete",
+                        f"https://www.googleapis.com/drive/v3/files/{f['id']}",
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     def _create_spreadsheet(self, title: str) -> gspread.Spreadsheet:
         """지정된 폴더에 스프레드시트를 직접 생성합니다 (Drive API로 parents 지정)."""
         if self._folder_id:
+            # 이전 실패 시도로 쌓인 루트 고아 파일 정리 → quota 확보
+            self._purge_root_files()
             url = "https://www.googleapis.com/drive/v3/files"
             body = {
                 "name": title,
