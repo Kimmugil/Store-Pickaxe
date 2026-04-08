@@ -1,28 +1,32 @@
 """
 애플 앱스토어 스크래퍼.
 - 검색/앱 정보: iTunes Search API (공식, 무료, 인증 불필요)
-- 리뷰 수집: app-store-scraper 라이브러리
+- 리뷰 수집: iTunes Customer Reviews RSS API (공식, 무료, 인증 불필요)
+  외부 라이브러리 의존 없이 requests 만으로 동작합니다.
 """
 import time
 from datetime import datetime, timezone, timedelta
 
 import requests
-from app_store_scraper import AppStore
 
 KST = timezone(timedelta(hours=9))
 DEFAULT_COUNTRY = "kr"
 ITUNES_SEARCH_URL = "https://itunes.apple.com/search"
 ITUNES_LOOKUP_URL = "https://itunes.apple.com/lookup"
+ITUNES_REVIEWS_URL = "https://itunes.apple.com/rss/customerreviews/id={app_id}/sortBy=mostRecent/page={page}/json"
 REQUEST_TIMEOUT = 15
 REQUEST_DELAY = 0.5
+MAX_REVIEW_PAGES = 10  # iTunes RSS 최대 10페이지 × 50개 = 500개
 
 
-def _fmt_dt(dt) -> str:
-    if dt is None:
+def _fmt_dt(value: str) -> str:
+    if not value:
         return ""
-    if isinstance(dt, datetime):
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
         return dt.strftime("%Y-%m-%d %H:%M:%S")
-    return str(dt)
+    except Exception:
+        return str(value)[:19]
 
 
 def _now_kst() -> str:
@@ -32,6 +36,10 @@ def _now_kst() -> str:
 class ApplePickaxe:
     def __init__(self, country: str = DEFAULT_COUNTRY):
         self.country = country
+        self._session = requests.Session()
+        self._session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+        })
 
     # ------------------------------------------------------------------ #
     #  검색 / 앱 정보 (iTunes Search API)
@@ -46,9 +54,7 @@ class ApplePickaxe:
             "limit": n_hits,
             "lang": "ko_kr",
         }
-        resp = requests.get(
-            ITUNES_SEARCH_URL, params=params, timeout=REQUEST_TIMEOUT
-        )
+        resp = self._session.get(ITUNES_SEARCH_URL, params=params, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         results = resp.json().get("results", [])
         return [self._parse_search_result(r) for r in results]
@@ -56,9 +62,7 @@ class ApplePickaxe:
     def get_app_detail(self, app_id: str | int) -> dict:
         """앱 ID로 앱스토어 상세 정보를 가져옵니다."""
         params = {"id": str(app_id), "country": self.country, "lang": "ko_kr"}
-        resp = requests.get(
-            ITUNES_LOOKUP_URL, params=params, timeout=REQUEST_TIMEOUT
-        )
+        resp = self._session.get(ITUNES_LOOKUP_URL, params=params, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         results = resp.json().get("results", [])
         if not results:
@@ -103,52 +107,105 @@ class ApplePickaxe:
             "bundle_id": raw.get("bundleId", ""),
             "file_size_bytes": raw.get("fileSizeBytes", ""),
             "minimum_os": raw.get("minimumOsVersion", ""),
-            "supported_devices": raw.get("supportedDevices", []),
         }
 
     # ------------------------------------------------------------------ #
-    #  리뷰 수집 (app-store-scraper)
+    #  리뷰 수집 (iTunes Customer Reviews RSS API)
     # ------------------------------------------------------------------ #
 
     def collect_all_reviews(
-        self, app_id: str | int, app_name: str, how_many: int = 2000
+        self, app_id: str | int, app_name: str = "", how_many: int = 500
     ) -> list[dict]:
-        """최초 전체 수집."""
-        app = AppStore(country=self.country, app_name=app_name, app_id=str(app_id))
-        app.review(how_many=how_many, sleep=REQUEST_DELAY)
-        return [self._parse_review(r) for r in (app.reviews or [])]
+        """iTunes RSS API로 최초 전체 수집합니다. 최대 500개."""
+        all_reviews = []
+        max_pages = min(MAX_REVIEW_PAGES, (how_many + 49) // 50)
+
+        for page in range(1, max_pages + 1):
+            batch = self._fetch_review_page(str(app_id), page)
+            if not batch:
+                break
+            all_reviews.extend(batch)
+            if len(all_reviews) >= how_many:
+                break
+            time.sleep(REQUEST_DELAY)
+
+        return all_reviews[:how_many]
 
     def collect_new_reviews(
         self,
         app_id: str | int,
         app_name: str,
         existing_ids: set,
-        how_many: int = 500,
+        how_many: int = 200,
     ) -> list[dict]:
         """
         기존 리뷰 ID 집합을 기준으로 신규 리뷰만 반환합니다.
-        app-store-scraper는 최신순 수집이므로 아는 ID 이후는 건너뜁니다.
+        iTunes RSS는 최신순으로 반환하므로 아는 ID를 만나면 중단합니다.
         """
-        app = AppStore(country=self.country, app_name=app_name, app_id=str(app_id))
-        app.review(how_many=how_many, sleep=REQUEST_DELAY)
-
         new_reviews = []
-        for r in app.reviews or []:
-            r_id = str(r.get("id", ""))
-            if r_id and r_id not in existing_ids:
-                new_reviews.append(self._parse_review(r))
+        max_pages = min(MAX_REVIEW_PAGES, (how_many + 49) // 50)
+
+        for page in range(1, max_pages + 1):
+            batch = self._fetch_review_page(str(app_id), page)
+            if not batch:
+                break
+
+            stop = False
+            for r in batch:
+                if r["review_id"] in existing_ids:
+                    stop = True
+                    break
+                new_reviews.append(r)
+
+            if stop:
+                break
+            time.sleep(REQUEST_DELAY)
 
         return new_reviews
 
-    def _parse_review(self, raw: dict) -> dict:
+    def _fetch_review_page(self, app_id: str, page: int) -> list[dict]:
+        """iTunes RSS API에서 특정 페이지의 리뷰를 가져옵니다."""
+        url = ITUNES_REVIEWS_URL.format(app_id=app_id, page=page)
+        try:
+            resp = self._session.get(url, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception:
+            return []
+
+        entries = data.get("feed", {}).get("entry", [])
+        if not entries:
+            return []
+
+        reviews = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            # 첫 번째 entry는 앱 정보일 수 있음 — im:rating 없으면 건너뜀
+            rating_raw = entry.get("im:rating", {}).get("label", "")
+            if not rating_raw:
+                continue
+
+            review_id = entry.get("id", {}).get("label", "")
+            if not review_id:
+                continue
+
+            reviews.append(self._parse_rss_entry(entry))
+
+        return reviews
+
+    def _parse_rss_entry(self, entry: dict) -> dict:
+        def _label(key: str) -> str:
+            return entry.get(key, {}).get("label", "")
+
         return {
-            "review_id": str(raw.get("id", "")),
-            "user_name": raw.get("userName", ""),
-            "rating": raw.get("rating", ""),
-            "title": raw.get("title", ""),
-            "content": raw.get("review", ""),
-            "app_version": raw.get("version", ""),
-            "reviewed_at": _fmt_dt(raw.get("date")),
+            "review_id": _label("id"),
+            "user_name": entry.get("author", {}).get("name", {}).get("label", ""),
+            "rating": _label("im:rating"),
+            "title": _label("title"),
+            "content": _label("content"),
+            "app_version": _label("im:version"),
+            "reviewed_at": _fmt_dt(_label("updated")),
             "language": self.country,
             "collected_at": _now_kst(),
         }
