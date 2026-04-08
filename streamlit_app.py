@@ -609,12 +609,15 @@ def _run_register_and_analyze(pending: dict):
     except Exception as e:
         err_msg = str(e)
         st.error(f"앱 등록 오류: {err_msg}")
-        if "마스터 스프레드시트를 찾을 수 없습니다" in err_msg:
-            st.info(
-                "📋 **해결 방법:** Google Drive 공유 폴더에 빈 Google Sheets 파일을 만들고 "
-                "이름을 **Store-Pickaxe-Master** 로 지정하세요. "
-                "서비스 계정에 이미 폴더 편집 권한이 있다면 별도 공유 설정은 필요 없습니다."
-            )
+        # 디버깅 정보 표시
+        from src.config import get_master_spreadsheet_id as _debug_id
+        _mid = _debug_id()
+        st.warning(
+            f"🔍 **디버그 정보**\n\n"
+            f"- `MASTER_SPREADSHEET_ID` 값: `{_mid}`\n"
+            f"- 값 타입: `{type(_mid).__name__}`\n"
+            f"- 오류 타입: `{type(e).__name__}`"
+        )
         return
 
     progress.progress(15, text="구글 플레이 리뷰 수집 중...")
