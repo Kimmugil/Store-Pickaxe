@@ -376,16 +376,38 @@ def _do_search(query: str) -> list[dict]:
     try:
         from src.google_pickaxe import GooglePickaxe
         gp = GooglePickaxe()
-        results.extend(gp.search_apps(query, n_hits=10))
+        results.extend(gp.search_apps(query, n_hits=15))
     except Exception as e:
         st.warning(f"구글 플레이 검색 오류: {e}")
     try:
         from src.apple_pickaxe import ApplePickaxe
         ap = ApplePickaxe()
-        results.extend(ap.search_apps(query, n_hits=10))
+        results.extend(ap.search_apps(query, n_hits=25))
     except Exception as e:
         st.warning(f"앱스토어 검색 오류: {e}")
     return results
+
+
+def _name_similarity(name1: str, name2: str) -> float:
+    """두 앱 이름의 단어 기반 유사도를 반환합니다 (0.0~1.0)."""
+    import re as _re
+    STOP = {'키우기', '게임', 'game', 'games', 'rpg', '방치형', 'idle', 'adventure',
+            '리그', '리버스', '모바일', 'mobile', 'online', '온라인', 'the', 'a', 'of'}
+
+    def tokenize(name: str) -> set:
+        name = _re.sub(r'[^\w\s가-힣a-z0-9]', ' ', name.lower())
+        return {t for t in name.split() if t not in STOP and len(t) > 1}
+
+    t1, t2 = tokenize(name1), tokenize(name2)
+    if not t1 or not t2:
+        return 0.0
+    intersection = len(t1 & t2)
+    if intersection == 0:
+        return 0.0
+    jaccard = intersection / len(t1 | t2)
+    if t1.issubset(t2) or t2.issubset(t1):
+        jaccard = max(jaccard, 0.7)
+    return jaccard
 
 
 def _merge_search_results(results: list[dict]) -> list[dict]:
@@ -397,18 +419,18 @@ def _merge_search_results(results: list[dict]) -> list[dict]:
     used_apple = set()
 
     for g in google_apps:
-        g_name = g.get("app_name", "").lower().strip()
-        best_match = None
+        g_name = g.get("app_name", "")
+        best_idx, best_score = None, 0.0
         for j, a in enumerate(apple_apps):
             if j in used_apple:
                 continue
-            a_name = a.get("app_name", "").lower().strip()
-            if g_name == a_name or (len(g_name) > 3 and g_name in a_name) or (len(a_name) > 3 and a_name in g_name):
-                best_match = j
-                break
-        if best_match is not None:
-            merged.append({"google": g, "apple": apple_apps[best_match]})
-            used_apple.add(best_match)
+            score = _name_similarity(g_name, a.get("app_name", ""))
+            if score > best_score:
+                best_score = score
+                best_idx = j
+        if best_idx is not None and best_score >= 0.3:
+            merged.append({"google": g, "apple": apple_apps[best_idx]})
+            used_apple.add(best_idx)
         else:
             merged.append({"google": g, "apple": None})
 
@@ -417,6 +439,20 @@ def _merge_search_results(results: list[dict]) -> list[dict]:
             merged.append({"google": None, "apple": a})
 
     return merged[:15]
+
+
+def _extract_apple_id(text: str) -> str | None:
+    """Apple 앱 ID 또는 스토어 URL에서 숫자 ID를 추출합니다."""
+    import re as _re
+    text = text.strip()
+    # URL 형식: /id1234567890
+    m = _re.search(r'/id(\d+)', text)
+    if m:
+        return m.group(1)
+    # 숫자만 입력
+    if text.isdigit():
+        return text
+    return None
 
 
 def _make_app_key(app_name: str, developer: str) -> str:
@@ -476,7 +512,31 @@ def render_register():
                 f'<p style="font-size:13px;margin:0;">{badge(a_rating_str, a_color, a_bg)} {badge(a.get("genre",""), "#757575", "#F4F5F7")}</p>'
             )
         else:
-            card('<p style="color:#757575;font-size:13px;text-align:center;">앱스토어에 없는 앱입니다.</p>')
+            card(
+                '<p style="font-size:12px;font-weight:700;color:#757575;letter-spacing:0.7px;margin-bottom:8px;">애플 앱스토어</p>'
+                '<p style="font-size:13px;color:#757575;margin:0 0 12px;word-break:keep-all;">자동으로 매칭되지 않았어요.<br>앱스토어 URL 또는 앱 ID를 직접 입력해 연결할 수 있어요.</p>'
+            )
+            manual_id = st.text_input(
+                "Apple 앱 ID 또는 앱스토어 URL",
+                placeholder="예) 123456789  또는  https://apps.apple.com/kr/app/.../id123456789",
+                key="manual_apple_id_input",
+                label_visibility="collapsed",
+            )
+            if st.button("애플 앱 연결하기", key="link_apple_btn"):
+                apple_id = _extract_apple_id(manual_id)
+                if not apple_id:
+                    st.error("유효한 앱 ID 또는 URL을 입력해주세요.")
+                else:
+                    with st.spinner("앱스토어에서 앱 정보를 불러오는 중..."):
+                        try:
+                            from src.apple_pickaxe import ApplePickaxe
+                            ap = ApplePickaxe()
+                            detail = ap.get_app_detail(apple_id)
+                            st.session_state.pending_register["apple"] = detail
+                            st.success(f"연결 완료: {detail.get('app_name', '')}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"앱을 찾을 수 없습니다: {e}")
 
     if not is_sheets_configured():
         st.error("Google Sheets 설정이 필요합니다. .env 파일 또는 Streamlit Secrets를 확인하세요.")
