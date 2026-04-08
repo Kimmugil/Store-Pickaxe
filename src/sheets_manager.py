@@ -71,15 +71,19 @@ class SheetsManager:
     #  내부 헬퍼
     # ------------------------------------------------------------------ #
 
+    def _create_spreadsheet(self, title: str) -> gspread.Spreadsheet:
+        """지정된 폴더에 스프레드시트를 직접 생성합니다 (서비스 계정 Drive 공간 미사용)."""
+        if self._folder_id:
+            return self._gc.create(title, folder_id=self._folder_id)
+        return self._gc.create(title)
+
     def _get_or_create_master(self) -> gspread.Spreadsheet:
         if self._master:
             return self._master
         try:
             self._master = self._gc.open(MASTER_SHEET_NAME)
         except gspread.SpreadsheetNotFound:
-            self._master = self._gc.create(MASTER_SHEET_NAME)
-            if self._folder_id:
-                self._gc.move_file(self._master.id, self._folder_id)
+            self._master = self._create_spreadsheet(MASTER_SHEET_NAME)
             ws = self._master.sheet1
             ws.update_title(MASTER_WORKSHEET)
             ws.append_row(MASTER_HEADERS)
@@ -137,11 +141,9 @@ class SheetsManager:
         if self.get_app_by_key(app_key):
             raise ValueError(f"이미 등록된 앱입니다: {app_key}")
 
-        # 전용 스프레드시트 생성
+        # 전용 스프레드시트 생성 (공유 폴더에 직접 생성)
         ss_name = f"[리뷰] {app_info.get('app_name', app_key)}"
-        new_ss = self._gc.create(ss_name)
-        if self._folder_id:
-            self._gc.move_file(new_ss.id, self._folder_id)
+        new_ss = self._create_spreadsheet(ss_name)
 
         # 워크시트 초기화
         ws0 = new_ss.sheet1

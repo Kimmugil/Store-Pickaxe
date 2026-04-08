@@ -21,22 +21,30 @@ st.set_page_config(
 DESIGN_CSS = """
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable.css');
-html,body,[class*="css"]{font-family:'Pretendard Variable',sans-serif!important;color:#1E1E1E;}
-.stApp{background-color:#F4F5F7!important;}
+html,body,[class*="css"]{font-family:'Pretendard Variable',sans-serif!important;color:#1E1E1E!important;}
+.stApp{background-color:#F4F5F7!important;color:#1E1E1E!important;}
 #MainMenu,footer,header{visibility:hidden;}
 .block-container{padding:2rem 3rem!important;max-width:1400px;}
-h1,h2,h3{font-weight:800;color:#1E1E1E;}
-.stTextInput>div>div>input{border:1.5px solid #1E1E1E!important;border-radius:20px!important;background:#FFFFFF!important;padding:14px 20px!important;font-size:15px!important;box-shadow:none!important;}
-.stTextInput>div>div>input:focus{border-color:#1E1E1E!important;box-shadow:none!important;}
+h1,h2,h3,h4,h5,h6{font-weight:800!important;color:#1E1E1E!important;}
+p,span,label,div{color:#1E1E1E;}
+.stMarkdown p,.stMarkdown span{color:#1E1E1E!important;}
+[data-testid="stMarkdownContainer"] p{color:#1E1E1E!important;}
+.stTextInput label{color:#1E1E1E!important;}
+.stTextInput>div{border:none!important;box-shadow:none!important;}
+.stTextInput>div>div{border:1.5px solid #1E1E1E!important;border-radius:20px!important;background:#FFFFFF!important;box-shadow:none!important;}
+.stTextInput>div>div>input{border:none!important;border-radius:20px!important;background:#FFFFFF!important;padding:14px 20px!important;font-size:15px!important;box-shadow:none!important;color:#1E1E1E!important;}
+.stTextInput>div>div>input:focus{outline:none!important;box-shadow:none!important;}
+.stTextInput>div>div:focus-within{border-color:#1E1E1E!important;box-shadow:none!important;}
 .stButton>button{border:1.5px solid #1E1E1E!important;border-radius:20px!important;background:#FFFFFF!important;color:#1E1E1E!important;font-weight:600!important;padding:8px 20px!important;box-shadow:none!important;}
 .stButton>button:hover{background:#1E1E1E!important;color:#FFFFFF!important;}
 .stButton>button[kind="primary"]{background:#1E1E1E!important;color:#FFFFFF!important;}
-.stButton>button[kind="primary"]:hover{background:#444!important;}
+.stButton>button[kind="primary"]:hover{background:#444444!important;}
 .stTabs [data-baseweb="tab-list"]{background:transparent;border-bottom:1.5px solid #1E1E1E;}
-.stTabs [data-baseweb="tab"]{border-radius:20px 20px 0 0!important;border:1.5px solid transparent!important;font-weight:600;}
+.stTabs [data-baseweb="tab"]{border-radius:20px 20px 0 0!important;border:1.5px solid transparent!important;font-weight:600;color:#1E1E1E!important;}
 .stTabs [aria-selected="true"]{border:1.5px solid #1E1E1E!important;border-bottom:1.5px solid #FFFFFF!important;background:#FFFFFF!important;}
 .stSelectbox>div>div{border:1.5px solid #1E1E1E!important;border-radius:20px!important;}
-div[data-testid="stMetricValue"]{font-weight:800;}
+div[data-testid="stMetricValue"]{font-weight:800;color:#1E1E1E!important;}
+[data-testid="stAlert"]{border-radius:20px!important;}
 </style>
 """
 
@@ -767,6 +775,7 @@ def _render_platform_comparison(analysis: dict):
         card(
             f'<p style="font-size:11px;font-weight:700;color:#757575;letter-spacing:0.7px;margin:0 0 12px;">애플 앱스토어 인사이트</p>'
             f'<p style="font-size:14px;line-height:1.8;word-break:keep-all;margin:0 0 16px;">{a_insights}</p>'
+            f'<p style="font-size:11px;color:#757575;margin:0 0 16px;">※ Apple 공식 API 제한으로 최근 500개 리뷰 기준 분석입니다.</p>'
             f'<p style="font-size:11px;font-weight:700;color:#757575;letter-spacing:0.7px;margin:0 0 8px;">주요 키워드</p>'
             f'<div>{kw_html}</div>'
         )
