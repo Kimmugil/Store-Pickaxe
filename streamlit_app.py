@@ -42,6 +42,12 @@ p,span,label,div{color:#1E1E1E;}
 .stButton>button[kind="primary"],.stButton>button[data-testid="baseButton-primary"],[data-testid="baseButton-primary"]{background:#1E1E1E!important;color:#FFFFFF!important;}
 .stButton>button[kind="primary"] p,.stButton>button[data-testid="baseButton-primary"] p,[data-testid="baseButton-primary"] p{color:#FFFFFF!important;}
 .stButton>button[kind="primary"]:hover,[data-testid="baseButton-primary"]:hover{background:#444444!important;}
+/* 검색 결과 카드 + 버튼 통합 스타일 */
+.result-card{background:#FFFFFF;border:1.5px solid #1E1E1E;border-radius:20px 20px 0 0;border-bottom:none;padding:16px 20px 14px;}
+div[data-testid="stMarkdownContainer"]:has(.result-card)+div .stButton>button{border-radius:0 0 20px 20px!important;border:1.5px solid #1E1E1E!important;border-top:none!important;margin-top:0!important;padding:10px 20px!important;}
+div[data-testid="stMarkdownContainer"]:has(.result-card)+div .stButton>button[kind="primary"],div[data-testid="stMarkdownContainer"]:has(.result-card)+div [data-testid="baseButton-primary"]{background:#1E1E1E!important;color:#FFFFFF!important;}
+div[data-testid="stMarkdownContainer"]:has(.result-card)+div .stButton>button[kind="primary"] p,div[data-testid="stMarkdownContainer"]:has(.result-card)+div [data-testid="baseButton-primary"] p{color:#FFFFFF!important;}
+.result-card-wrap{margin-bottom:16px;}
 .stTabs [data-baseweb="tab-list"]{background:transparent;border-bottom:1.5px solid #1E1E1E;}
 .stTabs [data-baseweb="tab"]{border-radius:20px 20px 0 0!important;border:1.5px solid transparent!important;font-weight:600;color:#1E1E1E!important;}
 .stTabs [aria-selected="true"]{border:1.5px solid #1E1E1E!important;border-bottom:1.5px solid #FFFFFF!important;background:#FFFFFF!important;}
@@ -346,39 +352,37 @@ def render_search():
             '<div style="width:52px;height:52px;border-radius:14px;border:1.5px solid #1E1E1E;background:#F4F5F7;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">📱</div>'
         )
 
-        col_info, col_btn = st.columns([6, 1])
-        with col_info:
-            st.markdown(
-                f'<div style="background:#FFFFFF;border:1.5px solid #1E1E1E;border-radius:20px;padding:16px 20px;display:flex;align-items:center;gap:16px;">'
-                f'{icon_html}'
-                f'<div style="flex:1;min-width:0;">'
-                f'<p style="font-weight:700;font-size:15px;margin:0 0 2px;word-break:keep-all;">{display_name}</p>'
-                f'<p style="font-size:12px;color:#757575;margin:0 0 8px;">{developer}</p>'
-                f'<div>{g_badge}{a_badge}</div>'
-                f'</div>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-        with col_btn:
-            st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
-            app_key = _make_app_key(display_name, developer)
-            if app_key in registered_keys:
-                if st.button("분석 확인 →", key=f"search_view_{app_key}", use_container_width=True):
-                    meta = sheets.get_app_by_key(app_key)
-                    go_detail(app_key, meta or {})
-                    st.rerun()
-            else:
-                if st.button("분석 시작 →", key=f"search_start_{app_key}", use_container_width=True, type="primary"):
-                    st.session_state.pending_register = {
-                        "app_key": app_key,
-                        "app_name": display_name,
-                        "developer": developer,
-                        "icon_url": icon_url,
-                        "google": g,
-                        "apple": a,
-                    }
-                    st.session_state.page = "register"
-                    st.rerun()
+        app_key = _make_app_key(display_name, developer)
+        st.markdown('<div class="result-card-wrap">', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="result-card" style="display:flex;align-items:center;gap:16px;">'
+            f'{icon_html}'
+            f'<div style="flex:1;min-width:0;">'
+            f'<p style="font-weight:700;font-size:15px;margin:0 0 2px;word-break:keep-all;">{display_name}</p>'
+            f'<p style="font-size:12px;color:#757575;margin:0 0 8px;">{developer}</p>'
+            f'<div>{g_badge}{a_badge}</div>'
+            f'</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        if app_key in registered_keys:
+            if st.button("분석 확인 →", key=f"search_view_{app_key}", use_container_width=True):
+                meta = sheets.get_app_by_key(app_key)
+                go_detail(app_key, meta or {})
+                st.rerun()
+        else:
+            if st.button("분석 시작 →", key=f"search_start_{app_key}", use_container_width=True, type="primary"):
+                st.session_state.pending_register = {
+                    "app_key": app_key,
+                    "app_name": display_name,
+                    "developer": developer,
+                    "icon_url": icon_url,
+                    "google": g,
+                    "apple": a,
+                }
+                st.session_state.page = "register"
+                st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 def _do_search(query: str) -> list[dict]:

@@ -73,9 +73,17 @@ class SheetsManager:
     # ------------------------------------------------------------------ #
 
     def _create_spreadsheet(self, title: str) -> gspread.Spreadsheet:
-        """지정된 폴더에 스프레드시트를 직접 생성합니다 (서비스 계정 Drive 공간 미사용)."""
+        """지정된 폴더에 스프레드시트를 직접 생성합니다 (Drive API로 parents 지정)."""
         if self._folder_id:
-            return self._gc.create(title, folder_id=self._folder_id)
+            url = "https://www.googleapis.com/drive/v3/files"
+            body = {
+                "name": title,
+                "mimeType": "application/vnd.google-apps.spreadsheet",
+                "parents": [self._folder_id],
+            }
+            resp = self._gc.http_client.request("post", url, json=body)
+            file_id = resp.json()["id"]
+            return self._gc.open_by_key(file_id)
         return self._gc.create(title)
 
     def _get_or_create_master(self) -> gspread.Spreadsheet:
