@@ -18,6 +18,7 @@ MASTER_WORKSHEET = "앱목록"
 MASTER_HEADERS = [
     "app_key", "app_name", "app_name_en", "developer",
     "google_package", "apple_app_id", "category",
+    "icon_url", "google_rating", "apple_rating",
     "registered_at", "last_pickaxe_run",
     "total_google", "total_apple",
     "spreadsheet_id", "status",
@@ -168,6 +169,9 @@ class SheetsManager:
             app_info.get("google_package", ""),
             app_info.get("apple_app_id", ""),
             app_info.get("category", ""),
+            app_info.get("icon_url", ""),
+            app_info.get("google_rating", ""),
+            app_info.get("apple_rating", ""),
             _now_kst(),
             "",
             0,

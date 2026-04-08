@@ -305,6 +305,16 @@ def render_search():
         card('<p style="color:#757575;text-align:center;margin:16px 0;">검색 결과가 없습니다. 다른 검색어를 입력해 보세요.</p>')
         return
 
+    st.markdown(
+        '<div style="background:#FFFFFF;border:1.5px solid #1E1E1E;border-radius:20px;padding:14px 20px;margin-bottom:20px;">'
+        '<p style="font-size:13px;color:#757575;margin:0;word-break:keep-all;">'
+        '앱 이름이 스토어마다 다르거나 검색 결과가 적을 경우, 실제로 양쪽 스토어에 있는 앱이 <b style="color:#1E1E1E;">애플 미확인</b>으로 표시될 수 있어요. '
+        '이 경우 <b style="color:#1E1E1E;">분석 시작 →</b> 단계에서 앱스토어 URL 또는 앱 ID를 직접 입력해 연결할 수 있어요.'
+        '</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
     # 구글 + 애플 결과를 앱 이름 기준으로 합산
     merged = _merge_search_results(results)
 
@@ -327,8 +337,8 @@ def render_search():
         a_rating = a.get("rating") if a else None
         g_color, g_bg = rating_color(g_rating)
         a_color, a_bg = rating_color(a_rating)
-        g_badge = badge(f"구글 {g_rating:.1f}★", g_color, g_bg) if g_rating else badge("구글 없음", "#757575", "#F4F5F7")
-        a_badge = badge(f"애플 {a_rating:.1f}★", a_color, a_bg) if a_rating else badge("애플 없음", "#757575", "#F4F5F7")
+        g_badge = badge(f"구글 {g_rating:.1f}★", g_color, g_bg) if g_rating else badge("구글 미확인", "#AAAAAA", "#F4F5F7")
+        a_badge = badge(f"애플 {a_rating:.1f}★", a_color, a_bg) if a_rating else badge("애플 미확인", "#AAAAAA", "#F4F5F7")
 
         icon_html = (
             f'<img src="{icon_url}" width="52" height="52" style="border-radius:14px;border:1.5px solid #E8E8E8;flex-shrink:0;" />'
@@ -565,6 +575,8 @@ def _run_register_and_analyze(pending: dict):
             "google_package": g.get("package_name", "") if g else "",
             "apple_app_id": a.get("apple_app_id", "") if a else "",
             "category": (g or a or {}).get("genre", ""),
+            "google_rating": g.get("rating", "") if g else "",
+            "apple_rating": a.get("rating", "") if a else "",
         }
         sheets.register_app(app_info)
     except ValueError:
