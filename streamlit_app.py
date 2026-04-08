@@ -505,29 +505,46 @@ def render_register():
         unsafe_allow_html=True,
     )
 
+    icon_url = pending.get("icon_url", "")
+    icon_html = (
+        f'<img src="{icon_url}" width="48" height="48" style="border-radius:12px;border:1.5px solid #E8E8E8;flex-shrink:0;" />'
+        if icon_url else
+        '<div style="width:48px;height:48px;border-radius:12px;border:1.5px solid #1E1E1E;background:#F4F5F7;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📱</div>'
+    )
+
     col1, col2 = st.columns(2)
     with col1:
         if g:
+            g_icon = f'<img src="{g.get("icon_url","")}" width="48" height="48" style="border-radius:12px;border:1.5px solid #E8E8E8;flex-shrink:0;" />' if g.get("icon_url") else icon_html
             g_color, g_bg = rating_color(g.get("rating"))
             g_rating_str = f"{float(g['rating']):.1f}★" if g.get("rating") is not None else "?★"
             card(
-                f'<p style="font-size:12px;font-weight:700;color:#757575;letter-spacing:0.7px;margin-bottom:8px;">구글 플레이</p>'
-                f'<p style="font-weight:700;font-size:15px;margin:0 0 4px;">{g.get("app_name","")}</p>'
-                f'<p style="font-size:12px;color:#757575;margin:0 0 8px;">{g.get("developer","")}</p>'
-                f'<p style="font-size:13px;margin:0;word-break:keep-all;">{badge(g_rating_str, g_color, g_bg)} {badge(g.get("genre",""), "#757575", "#F4F5F7")}</p>'
+                f'<p style="font-size:12px;font-weight:700;color:#757575;letter-spacing:0.7px;margin-bottom:10px;">구글 플레이</p>'
+                f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">'
+                f'{g_icon}'
+                f'<div style="flex:1;min-width:0;">'
+                f'<p style="font-weight:700;font-size:15px;margin:0 0 2px;word-break:keep-all;">{g.get("app_name","")}</p>'
+                f'<p style="font-size:12px;color:#757575;margin:0;">{g.get("developer","")}</p>'
+                f'</div></div>'
+                f'<div>{badge(g_rating_str, g_color, g_bg)} {badge(g.get("genre",""), "#757575", "#F4F5F7")}</div>'
             )
         else:
             card('<p style="color:#757575;font-size:13px;text-align:center;">구글 플레이에 없는 앱입니다.</p>')
 
     with col2:
         if a:
+            a_icon = f'<img src="{a.get("icon_url","")}" width="48" height="48" style="border-radius:12px;border:1.5px solid #E8E8E8;flex-shrink:0;" />' if a.get("icon_url") else icon_html
             a_color, a_bg = rating_color(a.get("rating"))
             a_rating_str = f"{float(a['rating']):.1f}★" if a.get("rating") is not None else "?★"
             card(
-                f'<p style="font-size:12px;font-weight:700;color:#757575;letter-spacing:0.7px;margin-bottom:8px;">애플 앱스토어</p>'
-                f'<p style="font-weight:700;font-size:15px;margin:0 0 4px;">{a.get("app_name","")}</p>'
-                f'<p style="font-size:12px;color:#757575;margin:0 0 8px;">{a.get("developer","")}</p>'
-                f'<p style="font-size:13px;margin:0;">{badge(a_rating_str, a_color, a_bg)} {badge(a.get("genre",""), "#757575", "#F4F5F7")}</p>'
+                f'<p style="font-size:12px;font-weight:700;color:#757575;letter-spacing:0.7px;margin-bottom:10px;">애플 앱스토어</p>'
+                f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">'
+                f'{a_icon}'
+                f'<div style="flex:1;min-width:0;">'
+                f'<p style="font-weight:700;font-size:15px;margin:0 0 2px;word-break:keep-all;">{a.get("app_name","")}</p>'
+                f'<p style="font-size:12px;color:#757575;margin:0;">{a.get("developer","")}</p>'
+                f'</div></div>'
+                f'<div>{badge(a_rating_str, a_color, a_bg)} {badge(a.get("genre",""), "#757575", "#F4F5F7")}</div>'
             )
         else:
             card(
@@ -590,7 +607,14 @@ def _run_register_and_analyze(pending: dict):
     except ValueError:
         pass  # 이미 등록된 경우
     except Exception as e:
-        st.error(f"앱 등록 오류: {e}")
+        err_msg = str(e)
+        st.error(f"앱 등록 오류: {err_msg}")
+        if "마스터 스프레드시트를 찾을 수 없습니다" in err_msg:
+            st.info(
+                "📋 **해결 방법:** Google Drive 공유 폴더에 빈 Google Sheets 파일을 만들고 "
+                "이름을 **Store-Pickaxe-Master** 로 지정하세요. "
+                "서비스 계정에 이미 폴더 편집 권한이 있다면 별도 공유 설정은 필요 없습니다."
+            )
         return
 
     progress.progress(15, text="구글 플레이 리뷰 수집 중...")

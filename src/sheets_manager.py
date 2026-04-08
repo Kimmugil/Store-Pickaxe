@@ -1,14 +1,17 @@
 """
 Google Sheets CRUD 매니저.
-마스터 시트(앱 목록)와 앱별 전용 스프레드시트를 관리합니다.
+마스터 스프레드시트 하나에 앱별 워크시트를 생성해 관리합니다.
+서비스 계정은 파일을 **생성하지 않고** 사용자가 만든 시트만 편집합니다.
+→ 서비스 계정 Drive 저장 공간(quota) 문제를 완전히 회피합니다.
 """
+import hashlib
 import json
 import uuid
 from datetime import datetime, timezone, timedelta
 
 import gspread
 
-from src.config import get_google_credentials, get_gdrive_folder_id
+from src.config import get_google_credentials, get_gdrive_folder_id, get_master_spreadsheet_id
 
 KST = timezone(timedelta(hours=9))
 
@@ -72,69 +75,43 @@ class SheetsManager:
     #  내부 헬퍼
     # ------------------------------------------------------------------ #
 
-    def _purge_root_files(self) -> None:
-        """서비스 계정 Drive 루트의 고아 파일을 영구 삭제해 quota를 확보합니다.
-        마스터 시트와 등록된 앱 스프레드시트는 보호합니다."""
-        protected_ids: set[str] = set()
-        try:
-            master = self._gc.open(MASTER_SHEET_NAME)
-            protected_ids.add(master.id)
-            for app in master.worksheet(MASTER_WORKSHEET).get_all_records():
-                if sid := app.get("spreadsheet_id"):
-                    protected_ids.add(sid)
-        except Exception:
-            pass  # 마스터가 없으면 보호 목록 없이 진행
+    @staticmethod
+    def _ws_prefix(app_key: str) -> str:
+        """앱별 워크시트 접두사 (MD5 해시 8자리)."""
+        return hashlib.md5(app_key.encode()).hexdigest()[:8]
 
-        try:
-            resp = self._gc.http_client.request(
-                "get",
-                "https://www.googleapis.com/drive/v3/files",
-                params={
-                    "q": "'root' in parents and trashed=false",
-                    "fields": "files(id,name)",
-                    "pageSize": "100",
-                },
-            )
-            for f in resp.json().get("files", []):
-                if f["id"] in protected_ids:
-                    continue
-                try:
-                    self._gc.http_client.request(
-                        "delete",
-                        f"https://www.googleapis.com/drive/v3/files/{f['id']}",
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-    def _create_spreadsheet(self, title: str) -> gspread.Spreadsheet:
-        """지정된 폴더에 스프레드시트를 직접 생성합니다 (Drive API로 parents 지정)."""
-        if self._folder_id:
-            # 이전 실패 시도로 쌓인 루트 고아 파일 정리 → quota 확보
-            self._purge_root_files()
-            url = "https://www.googleapis.com/drive/v3/files"
-            body = {
-                "name": title,
-                "mimeType": "application/vnd.google-apps.spreadsheet",
-                "parents": [self._folder_id],
-            }
-            resp = self._gc.http_client.request("post", url, json=body)
-            file_id = resp.json()["id"]
-            return self._gc.open_by_key(file_id)
-        return self._gc.create(title)
+    def _ws_name(self, app_key: str, ws_type: str) -> str:
+        """앱별 워크시트 이름. ws_type: google, apple, timeline, analysis"""
+        return f"{self._ws_prefix(app_key)}_{ws_type}"
 
     def _get_or_create_master(self) -> gspread.Spreadsheet:
+        """마스터 스프레드시트를 찾아 반환합니다.
+        사용자가 미리 만들어 둔 시트를 ID 또는 이름으로 검색합니다."""
         if self._master:
             return self._master
+
+        # 1) Secrets/환경변수에 설정된 ID로 열기
+        master_id = get_master_spreadsheet_id()
+        if master_id:
+            try:
+                self._master = self._gc.open_by_key(master_id)
+                return self._master
+            except Exception:
+                pass
+
+        # 2) 이름으로 열기
         try:
             self._master = self._gc.open(MASTER_SHEET_NAME)
+            return self._master
         except gspread.SpreadsheetNotFound:
-            self._master = self._create_spreadsheet(MASTER_SHEET_NAME)
-            ws = self._master.sheet1
-            ws.update_title(MASTER_WORKSHEET)
-            ws.append_row(MASTER_HEADERS)
-        return self._master
+            pass
+
+        # 3) 못 찾으면 안내
+        raise RuntimeError(
+            "마스터 스프레드시트를 찾을 수 없습니다. "
+            "Google Drive 공유 폴더에 'Store-Pickaxe-Master'라는 "
+            "빈 Google Sheets 파일을 만들어 주세요."
+        )
 
     def _get_master_ws(self) -> gspread.Worksheet:
         ss = self._get_or_create_master()
@@ -144,9 +121,6 @@ class SheetsManager:
             ws = ss.add_worksheet(MASTER_WORKSHEET, rows=1000, cols=len(MASTER_HEADERS))
             ws.append_row(MASTER_HEADERS)
             return ws
-
-    def _get_app_ss(self, spreadsheet_id: str) -> gspread.Spreadsheet:
-        return self._gc.open_by_key(spreadsheet_id)
 
     def _ensure_worksheet(
         self, ss: gspread.Spreadsheet, title: str, headers: list[str]
@@ -165,46 +139,35 @@ class SheetsManager:
     def get_all_apps(self) -> list[dict]:
         """마스터 시트의 전체 앱 목록을 반환합니다."""
         ws = self._get_master_ws()
-        records = ws.get_all_records()
-        return records
+        return ws.get_all_records()
 
     def get_active_apps(self) -> list[dict]:
         """status = 'active' 인 앱만 반환합니다."""
         return [a for a in self.get_all_apps() if a.get("status") == "active"]
 
     def get_app_by_key(self, app_key: str) -> dict | None:
-        apps = self.get_all_apps()
-        for app in apps:
+        for app in self.get_all_apps():
             if app.get("app_key") == app_key:
                 return app
         return None
 
     def register_app(self, app_info: dict) -> str:
         """
-        새 앱을 마스터 시트에 등록하고 전용 스프레드시트를 생성합니다.
-        반환: 생성된 spreadsheet_id
+        새 앱을 마스터 시트에 등록하고 워크시트들을 생성합니다.
+        파일을 새로 만들지 않고 마스터 시트 안에 워크시트를 추가합니다.
+        반환: 마스터 spreadsheet_id
         """
         app_key = app_info["app_key"]
         if self.get_app_by_key(app_key):
             raise ValueError(f"이미 등록된 앱입니다: {app_key}")
 
-        # 전용 스프레드시트 생성 (공유 폴더에 직접 생성)
-        ss_name = f"[리뷰] {app_info.get('app_name', app_key)}"
-        new_ss = self._create_spreadsheet(ss_name)
+        master = self._get_or_create_master()
 
-        # 워크시트 초기화
-        ws0 = new_ss.sheet1
-        ws0.update_title("google_reviews")
-        ws0.append_row(GOOGLE_REVIEW_HEADERS)
-
-        new_ss.add_worksheet("apple_reviews", rows=10000, cols=len(APPLE_REVIEW_HEADERS))
-        new_ss.worksheet("apple_reviews").append_row(APPLE_REVIEW_HEADERS)
-
-        new_ss.add_worksheet("timeline", rows=500, cols=len(TIMELINE_HEADERS))
-        new_ss.worksheet("timeline").append_row(TIMELINE_HEADERS)
-
-        new_ss.add_worksheet("analysis_history", rows=1000, cols=len(ANALYSIS_HISTORY_HEADERS))
-        new_ss.worksheet("analysis_history").append_row(ANALYSIS_HISTORY_HEADERS)
+        # 앱별 워크시트 초기화 (마스터 시트 안에 생성)
+        self._ensure_worksheet(master, self._ws_name(app_key, "google"), GOOGLE_REVIEW_HEADERS)
+        self._ensure_worksheet(master, self._ws_name(app_key, "apple"), APPLE_REVIEW_HEADERS)
+        self._ensure_worksheet(master, self._ws_name(app_key, "timeline"), TIMELINE_HEADERS)
+        self._ensure_worksheet(master, self._ws_name(app_key, "analysis"), ANALYSIS_HISTORY_HEADERS)
 
         # 마스터 시트에 행 추가
         row = [
@@ -222,11 +185,11 @@ class SheetsManager:
             "",
             0,
             0,
-            new_ss.id,
+            master.id,
             "active",
         ]
         self._get_master_ws().append_row(row)
-        return new_ss.id
+        return master.id
 
     def update_app_meta(self, app_key: str, updates: dict):
         """마스터 시트에서 특정 앱의 필드를 업데이트합니다."""
@@ -246,13 +209,13 @@ class SheetsManager:
     # ------------------------------------------------------------------ #
 
     def _save_reviews(
-        self, spreadsheet_id: str, worksheet_name: str,
+        self, app_key: str, ws_type: str,
         headers: list[str], reviews: list[dict]
     ) -> int:
         if not reviews:
             return 0
-        ss = self._get_app_ss(spreadsheet_id)
-        ws = self._ensure_worksheet(ss, worksheet_name, headers)
+        master = self._get_or_create_master()
+        ws = self._ensure_worksheet(master, self._ws_name(app_key, ws_type), headers)
 
         existing_ids = set()
         try:
@@ -275,9 +238,7 @@ class SheetsManager:
         app = self.get_app_by_key(app_key)
         if not app:
             raise KeyError(f"앱을 찾을 수 없습니다: {app_key}")
-        added = self._save_reviews(
-            app["spreadsheet_id"], "google_reviews", GOOGLE_REVIEW_HEADERS, reviews
-        )
+        added = self._save_reviews(app_key, "google", GOOGLE_REVIEW_HEADERS, reviews)
         if added > 0:
             new_total = int(app.get("total_google", 0)) + added
             self.update_app_meta(app_key, {
@@ -290,9 +251,7 @@ class SheetsManager:
         app = self.get_app_by_key(app_key)
         if not app:
             raise KeyError(f"앱을 찾을 수 없습니다: {app_key}")
-        added = self._save_reviews(
-            app["spreadsheet_id"], "apple_reviews", APPLE_REVIEW_HEADERS, reviews
-        )
+        added = self._save_reviews(app_key, "apple", APPLE_REVIEW_HEADERS, reviews)
         if added > 0:
             new_total = int(app.get("total_apple", 0)) + added
             self.update_app_meta(app_key, {
@@ -309,13 +268,10 @@ class SheetsManager:
         platform: 'google' 또는 'apple'
         since: 'YYYY-MM-DD HH:MM:SS' 이후 리뷰만 반환
         """
-        app = self.get_app_by_key(app_key)
-        if not app:
-            return []
-        ss = self._get_app_ss(app["spreadsheet_id"])
-        ws_name = "google_reviews" if platform == "google" else "apple_reviews"
+        master = self._get_or_create_master()
+        ws_type = "google" if platform == "google" else "apple"
         try:
-            ws = ss.worksheet(ws_name)
+            ws = master.worksheet(self._ws_name(app_key, ws_type))
             records = ws.get_all_records()
         except Exception:
             return []
@@ -328,13 +284,10 @@ class SheetsManager:
 
     def get_existing_review_ids(self, app_key: str, platform: str) -> set:
         """이미 적재된 리뷰 ID 집합을 반환합니다 (중복 방지용)."""
-        app = self.get_app_by_key(app_key)
-        if not app or not app.get("spreadsheet_id"):
-            return set()
+        master = self._get_or_create_master()
+        ws_type = "google" if platform == "google" else "apple"
         try:
-            ss = self._get_app_ss(app["spreadsheet_id"])
-            ws_name = "google_reviews" if platform == "google" else "apple_reviews"
-            ws = ss.worksheet(ws_name)
+            ws = master.worksheet(self._ws_name(app_key, ws_type))
             ids = ws.col_values(1)[1:]
             return set(ids)
         except Exception:
@@ -345,23 +298,19 @@ class SheetsManager:
     # ------------------------------------------------------------------ #
 
     def load_timeline(self, app_key: str) -> list[dict]:
-        app = self.get_app_by_key(app_key)
-        if not app:
-            return []
+        master = self._get_or_create_master()
         try:
-            ss = self._get_app_ss(app["spreadsheet_id"])
-            ws = ss.worksheet("timeline")
+            ws = master.worksheet(self._ws_name(app_key, "timeline"))
             return ws.get_all_records()
         except Exception:
             return []
 
     def save_timeline_event(self, app_key: str, event: dict):
         """event_id 기준으로 upsert합니다."""
-        app = self.get_app_by_key(app_key)
-        if not app:
-            raise KeyError(f"앱을 찾을 수 없습니다: {app_key}")
-        ss = self._get_app_ss(app["spreadsheet_id"])
-        ws = self._ensure_worksheet(ss, "timeline", TIMELINE_HEADERS)
+        master = self._get_or_create_master()
+        ws = self._ensure_worksheet(
+            master, self._ws_name(app_key, "timeline"), TIMELINE_HEADERS
+        )
 
         event_id = event.get("event_id") or str(uuid.uuid4())[:8]
         event["event_id"] = event_id
@@ -385,15 +334,14 @@ class SheetsManager:
 
     def save_analysis(self, app_key: str, analysis: dict) -> str:
         """
-        분석 결과를 analysis_history 시트에 추가합니다.
+        분석 결과를 analysis 시트에 추가합니다.
         매 분석마다 새 행이 추가되며 덮어쓰지 않습니다.
         반환: analysis_id
         """
-        app = self.get_app_by_key(app_key)
-        if not app:
-            raise KeyError(f"앱을 찾을 수 없습니다: {app_key}")
-        ss = self._get_app_ss(app["spreadsheet_id"])
-        ws = self._ensure_worksheet(ss, "analysis_history", ANALYSIS_HISTORY_HEADERS)
+        master = self._get_or_create_master()
+        ws = self._ensure_worksheet(
+            master, self._ws_name(app_key, "analysis"), ANALYSIS_HISTORY_HEADERS
+        )
 
         analysis_id = str(uuid.uuid4())
         analysis["analysis_id"] = analysis_id
@@ -405,12 +353,9 @@ class SheetsManager:
 
     def get_latest_analysis(self, app_key: str) -> dict | None:
         """가장 최근 분석 결과를 반환합니다."""
-        app = self.get_app_by_key(app_key)
-        if not app:
-            return None
+        master = self._get_or_create_master()
         try:
-            ss = self._get_app_ss(app["spreadsheet_id"])
-            ws = ss.worksheet("analysis_history")
+            ws = master.worksheet(self._ws_name(app_key, "analysis"))
             records = ws.get_all_records()
             if records:
                 return records[-1]
@@ -420,12 +365,9 @@ class SheetsManager:
 
     def get_analysis_history(self, app_key: str) -> list[dict]:
         """모든 분석 이력을 최신순으로 반환합니다."""
-        app = self.get_app_by_key(app_key)
-        if not app:
-            return []
+        master = self._get_or_create_master()
         try:
-            ss = self._get_app_ss(app["spreadsheet_id"])
-            ws = ss.worksheet("analysis_history")
+            ws = master.worksheet(self._ws_name(app_key, "analysis"))
             records = ws.get_all_records()
             return list(reversed(records))
         except Exception:

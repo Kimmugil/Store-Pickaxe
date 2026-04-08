@@ -27,6 +27,10 @@ def get_gdrive_folder_id() -> str | None:
     return _get("GDRIVE_FOLDER_ID")
 
 
+def get_master_spreadsheet_id() -> str | None:
+    return _get("MASTER_SPREADSHEET_ID")
+
+
 def get_google_credentials():
     """
     Google 서비스 계정 자격증명을 반환합니다.
