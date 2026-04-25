@@ -2,8 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import type { AppMeta, Snapshot, Texts } from "@/lib/types";
-import { ratingColor, trendArrow, formatRating, formatDate } from "@/lib/utils";
-import { t } from "./TextsProvider";
+import { ratingColor, trendArrow, formatRating, formatDate, t } from "@/lib/utils";
 
 interface Props {
   app: AppMeta;

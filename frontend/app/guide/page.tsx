@@ -1,5 +1,5 @@
 import { getTexts } from "@/lib/sheets";
-import { t } from "@/components/TextsProvider";
+import { t } from "@/lib/utils";
 
 export const revalidate = 3600;
 

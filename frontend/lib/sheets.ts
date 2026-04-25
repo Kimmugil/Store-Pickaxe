@@ -7,7 +7,8 @@ import { unstable_cache } from "next/cache";
 import type { AppMeta, Snapshot, TimelineEvent, Analysis, Review } from "./types";
 
 function getAuth() {
-  const raw = process.env.GOOGLE_CREDENTIALS_JSON!;
+  const raw = process.env.GOOGLE_CREDENTIALS_JSON;
+  if (!raw) throw new Error("GOOGLE_CREDENTIALS_JSON 환경변수가 설정되지 않았습니다.");
   const credentials = JSON.parse(raw);
   return new google.auth.GoogleAuth({
     credentials,
@@ -60,8 +61,12 @@ const MASTER_ID = () => process.env.MASTER_SPREADSHEET_ID!;
 
 export const getAllApps = unstable_cache(
   async (): Promise<AppMeta[]> => {
-    const rows = await readRange(MASTER_ID(), "MASTER!A:Q");
-    return rowsToRecords<AppMeta>(rows).map(normalizeApp);
+    try {
+      const rows = await readRange(MASTER_ID(), "MASTER!A:Q");
+      return rowsToRecords<Record<string, string>>(rows).map(normalizeApp);
+    } catch {
+      return [];
+    }
   },
   ["all-apps"],
   { revalidate: 120 }
@@ -69,12 +74,16 @@ export const getAllApps = unstable_cache(
 
 export const getTexts = unstable_cache(
   async (): Promise<Record<string, string>> => {
-    const rows = await readRange(MASTER_ID(), "UI_TEXTS!A:B");
-    const texts: Record<string, string> = {};
-    for (const row of rows.slice(1)) {
-      if (row[0]) texts[row[0]] = row[1] ?? "";
+    try {
+      const rows = await readRange(MASTER_ID(), "UI_TEXTS!A:B");
+      const texts: Record<string, string> = {};
+      for (const row of rows.slice(1)) {
+        if (row[0]) texts[row[0]] = row[1] ?? "";
+      }
+      return texts;
+    } catch {
+      return {};
     }
-    return texts;
   },
   ["ui-texts"],
   { revalidate: 3600 }
@@ -82,12 +91,16 @@ export const getTexts = unstable_cache(
 
 export const getConfigValues = unstable_cache(
   async (): Promise<Record<string, string>> => {
-    const rows = await readRange(MASTER_ID(), "CONFIG!A:B");
-    const config: Record<string, string> = {};
-    for (const row of rows.slice(1)) {
-      if (row[0]) config[row[0]] = row[1] ?? "";
+    try {
+      const rows = await readRange(MASTER_ID(), "CONFIG!A:B");
+      const config: Record<string, string> = {};
+      for (const row of rows.slice(1)) {
+        if (row[0]) config[row[0]] = row[1] ?? "";
+      }
+      return config;
+    } catch {
+      return {};
     }
-    return config;
   },
   ["config-values"],
   { revalidate: 300 }
@@ -102,8 +115,12 @@ export async function getAdminPassword(): Promise<string> {
 
 export const getAppSnapshots = unstable_cache(
   async (spreadsheetId: string): Promise<Snapshot[]> => {
-    const rows = await readRange(spreadsheetId, "SNAPSHOTS!A:G");
-    return rowsToRecords<Snapshot>(rows).map(normalizeSnapshot);
+    try {
+      const rows = await readRange(spreadsheetId, "SNAPSHOTS!A:G");
+      return rowsToRecords<Record<string, string>>(rows).map(normalizeSnapshot);
+    } catch {
+      return [];
+    }
   },
   ["app-snapshots"],
   { revalidate: 300 }
@@ -111,8 +128,12 @@ export const getAppSnapshots = unstable_cache(
 
 export const getAppTimeline = unstable_cache(
   async (spreadsheetId: string): Promise<TimelineEvent[]> => {
-    const rows = await readRange(spreadsheetId, "TIMELINE!A:K");
-    return rowsToRecords<TimelineEvent>(rows).map(normalizeEvent);
+    try {
+      const rows = await readRange(spreadsheetId, "TIMELINE!A:K");
+      return rowsToRecords<Record<string, string>>(rows).map(normalizeEvent);
+    } catch {
+      return [];
+    }
   },
   ["app-timeline"],
   { revalidate: 300 }
@@ -120,8 +141,12 @@ export const getAppTimeline = unstable_cache(
 
 export const getAppAnalyses = unstable_cache(
   async (spreadsheetId: string): Promise<Analysis[]> => {
-    const rows = await readRange(spreadsheetId, "ANALYSIS!A:N");
-    return rowsToRecords<Analysis>(rows).map(normalizeAnalysis);
+    try {
+      const rows = await readRange(spreadsheetId, "ANALYSIS!A:N");
+      return rowsToRecords<Record<string, string>>(rows).map(normalizeAnalysis);
+    } catch {
+      return [];
+    }
   },
   ["app-analyses"],
   { revalidate: 300 }
@@ -133,13 +158,16 @@ export const getAppReviews = unstable_cache(
     platform: "google" | "apple",
     limit = 50
   ): Promise<Review[]> => {
-    const sheet = platform === "google" ? "GOOGLE_REVIEWS" : "APPLE_REVIEWS";
-    const cols = platform === "google" ? "A:G" : "A:G";
-    const rows = await readRange(spreadsheetId, `${sheet}!${cols}`);
-    const records = rowsToRecords<Review>(rows);
-    return records
-      .sort((a, b) => (b.reviewed_at > a.reviewed_at ? 1 : -1))
-      .slice(0, limit);
+    try {
+      const sheet = platform === "google" ? "GOOGLE_REVIEWS" : "APPLE_REVIEWS";
+      const rows = await readRange(spreadsheetId, `${sheet}!A:G`);
+      const records = rowsToRecords<Record<string, string>>(rows) as unknown as Review[];
+      return records
+        .sort((a, b) => (b.reviewed_at > a.reviewed_at ? 1 : -1))
+        .slice(0, limit);
+    } catch {
+      return [];
+    }
   },
   ["app-reviews"],
   { revalidate: 600 }

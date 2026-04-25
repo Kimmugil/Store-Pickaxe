@@ -11,7 +11,8 @@ async function searchGoogle(query: string): Promise<SearchResult[]> {
   try {
     // google-play-scraper는 서버사이드(Node.js)에서만 동작
     const gps = await import("google-play-scraper");
-    const results: Record<string, unknown>[] = await gps.search({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const results: any[] = await gps.search({
       term: query,
       num: 8,
       country: "kr",

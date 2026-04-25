@@ -11,7 +11,3 @@ export function TextsProvider({ texts, children }: { texts: Texts; children: Rea
 export function useTexts(): Texts {
   return useContext(TextsContext);
 }
-
-export function t(texts: Texts, key: string, fallback = ""): string {
-  return texts[key] ?? fallback;
-}

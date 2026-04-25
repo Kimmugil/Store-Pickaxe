@@ -4,6 +4,11 @@ export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
 
+// UI 텍스트 헬퍼 — 서버/클라이언트 양쪽에서 사용 가능
+export function t(texts: Record<string, string>, key: string, fallback = ""): string {
+  return texts[key] ?? fallback;
+}
+
 export function ratingColor(rating: number | null): string {
   if (rating === null) return "text-neutral-400";
   if (rating >= 4.0) return "text-positive";
