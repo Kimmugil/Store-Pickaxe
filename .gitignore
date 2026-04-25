@@ -18,8 +18,16 @@ ENV/
 .env
 *.env
 
-# Streamlit secrets (NEVER commit)
-.streamlit/secrets.toml
+# Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+frontend/.env
+
+# 민감한 자격증명 파일 (절대 커밋 금지)
+credentials*.json
+service_account*.json
+*.json.bak
 
 # IDE
 .vscode/
