@@ -190,6 +190,18 @@ export async function getAppByKeyDirect(appKey: string): Promise<AppMeta | null>
   }
 }
 
+// ── MASTER 헤더 상수 ────────────────────────────────────────────
+const MASTER_HEADERS = [
+  "app_key", "app_name", "developer",
+  "google_package", "apple_app_id", "icon_url",
+  "google_rating", "apple_rating",
+  "collect_frequency", "status", "ai_approved",
+  "spreadsheet_id",
+  "registered_at", "last_snapshot_at",
+  "last_collected_at", "last_analyzed_at",
+  "pending_ai_trigger",
+];
+
 // ── 쓰기 (API 라우트 전용) ──────────────────────────────────────
 
 export async function registerAppToMaster(app: {
@@ -201,6 +213,16 @@ export async function registerAppToMaster(app: {
   icon_url: string;
   spreadsheet_id: string;
 }): Promise<void> {
+  // 헤더 행이 없으면 먼저 생성 (init_sheets.py 미실행 시 대비)
+  try {
+    const headerCheck = await readRange(MASTER_ID(), "MASTER!A1:A1");
+    if (!headerCheck.length || headerCheck[0]?.[0] !== "app_key") {
+      await writeRange(MASTER_ID(), "MASTER!A1:Q1", [MASTER_HEADERS]);
+    }
+  } catch {
+    // MASTER 탭 자체가 없는 경우 — appendRow에서 오류가 날 수 있으므로 무시하고 진행
+  }
+
   const now = new Date().toISOString();
   await appendRow(MASTER_ID(), "MASTER!A:Q", [
     app.app_key, app.app_name, app.developer,

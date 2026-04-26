@@ -57,7 +57,25 @@ def _ensure_sheet(ss: gspread.Spreadsheet, title: str, headers: list[str]) -> gs
 def get_all_apps() -> list[dict]:
     ss = _master_ss()
     ws = _ensure_sheet(ss, "MASTER", MASTER_HEADERS)
-    return ws.get_all_records()
+    rows = ws.get_all_values()
+    if not rows:
+        return []
+    # 첫 행이 실제 헤더인지 확인 (init_sheets.py 미실행 시 데이터가 헤더 자리에 올 수 있음)
+    if rows[0] and rows[0][0] == "app_key":
+        headers = rows[0]
+        data_rows = rows[1:]
+    else:
+        # 헤더가 없으면 표준 헤더로 파싱
+        headers = MASTER_HEADERS
+        data_rows = rows
+    result = []
+    for row in data_rows:
+        if not any(row):   # 빈 행 건너뜀
+            continue
+        record = {headers[i] if i < len(headers) else "extra": (row[i] if i < len(row) else "")
+                  for i in range(len(headers))}
+        result.append(record)
+    return result
 
 
 def get_active_apps() -> list[dict]:
