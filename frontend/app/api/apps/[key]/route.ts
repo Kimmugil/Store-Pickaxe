@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  getAllApps,
+  getAppByKeyDirect,
   getAppSnapshots,
   getAppTimeline,
   getAppAnalyses,
@@ -12,8 +12,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ key:
   const { key } = await params;
 
   try {
-    const apps = await getAllApps();
-    const meta = apps.find((a) => a.app_key === key);
+    // 캐시 없이 직접 조회 — 등록 직후에도 즉시 반영됨
+    const meta = await getAppByKeyDirect(key);
     if (!meta) return NextResponse.json({ error: "앱을 찾을 수 없습니다." }, { status: 404 });
 
     const ssId = meta.spreadsheet_id;

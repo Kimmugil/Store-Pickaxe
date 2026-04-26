@@ -173,6 +173,19 @@ export const getAppReviews = unstable_cache(
   { revalidate: 600 }
 );
 
+/**
+ * 캐시 없이 특정 앱을 직접 조회 (등록 직후 상세 페이지 등 신선도가 중요한 경우)
+ */
+export async function getAppByKeyDirect(appKey: string): Promise<AppMeta | null> {
+  try {
+    const rows = await readRange(MASTER_ID(), "MASTER!A:Q");
+    const all = rowsToRecords<Record<string, string>>(rows).map(normalizeApp);
+    return all.find((a) => a.app_key === appKey) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── 쓰기 (API 라우트 전용) ──────────────────────────────────────
 
 export async function registerAppToMaster(app: {
