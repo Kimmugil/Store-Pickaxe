@@ -35,10 +35,14 @@ def _should_collect_reviews(app: dict, today: str) -> bool:
     """collect_frequency에 따라 오늘 리뷰를 수집해야 하는지 판단."""
     freq = app.get("collect_frequency", "medium")
     last = app.get("last_collected_at", "")
+
+    # 오늘 이미 수집한 경우 스킵 (같은 날 두 번 실행 방지)
+    if last and last[:10] == today:
+        return False
+
     if not last:
         return True
 
-    last_date = last[:10]
     weekday = datetime.now(timezone.utc).weekday()  # 0=월, 6=일
 
     if freq == "high":

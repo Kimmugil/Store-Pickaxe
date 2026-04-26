@@ -82,7 +82,8 @@ export default function AdminPage() {
   }
 
   const pendingAI = apps.filter((a) => !a.ai_approved && a.status !== "paused");
-  const activeApps = apps.filter((a) => a.status === "active" || a.status === "pending");
+  // paused 포함 전체 앱 표시 (paused 앱도 다시 활성화할 수 있어야 함)
+  const allManagedApps = apps.filter((a) => a.status === "active" || a.status === "pending" || a.status === "paused");
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -136,9 +137,9 @@ export default function AdminPage() {
       {/* 앱 관리 */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-          {texts["admin.section.apps"] || "앱 관리"} ({activeApps.length})
+          {texts["admin.section.apps"] || "앱 관리"} ({allManagedApps.length})
         </h2>
-        {activeApps.map((app) => (
+        {allManagedApps.map((app) => (
           <div key={app.app_key} className="card p-4">
             <div className="flex items-start justify-between gap-3">
               <div>

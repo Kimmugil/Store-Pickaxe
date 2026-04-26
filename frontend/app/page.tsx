@@ -6,7 +6,8 @@ export const revalidate = 120;
 export default async function HomePage() {
   const [apps, texts] = await Promise.all([getAllApps(), getTexts()]);
 
-  const activeApps = apps.filter((a) => a.status === "active");
+  // active + pending 모두 표시 (pending은 관리자 승인 대기 배지 표시)
+  const activeApps = apps.filter((a) => a.status === "active" || a.status === "pending");
 
   // 각 앱의 스냅샷 + 분석 여부 병렬 로드
   const appData = await Promise.all(

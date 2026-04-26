@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
 
     switch (action) {
       case "approve_ai": {
+        // ai_approved + status 두 필드를 순서대로 업데이트
         await updateAppField(app_key, "ai_approved", "TRUE");
         await updateAppField(app_key, "status", "active");
         return NextResponse.json({ ok: true });

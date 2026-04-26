@@ -161,7 +161,11 @@ export const getAppReviews = unstable_cache(
     try {
       const sheet = platform === "google" ? "GOOGLE_REVIEWS" : "APPLE_REVIEWS";
       const rows = await readRange(spreadsheetId, `${sheet}!A:G`);
-      const records = rowsToRecords<Record<string, string>>(rows) as unknown as Review[];
+      const records = rowsToRecords<Record<string, string>>(rows).map((r) => ({
+        ...r,
+        rating: parseInt(r.rating) || 0,
+        thumbs_up: parseInt(r.thumbs_up) || 0,
+      })) as unknown as Review[];
       return records
         .sort((a, b) => (b.reviewed_at > a.reviewed_at ? 1 : -1))
         .slice(0, limit);

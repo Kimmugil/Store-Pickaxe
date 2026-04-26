@@ -36,11 +36,16 @@ export default function AppCard({ app, snapshots, hasAnalysis, lastAnalysisDate,
           <p className="font-semibold text-gray-900 truncate">{app.app_name}</p>
           <p className="text-xs text-gray-400 truncate">{app.developer}</p>
         </div>
-        {hasAnalysis && (
-          <span className="badge bg-indigo-50 text-indigo-600 ml-auto flex-shrink-0">
-            AI
-          </span>
-        )}
+        <div className="ml-auto flex gap-1 flex-shrink-0">
+          {app.status === "pending" && (
+            <span className="badge bg-yellow-50 text-yellow-600">
+              {t(texts, "admin.app.status.pending", "승인 대기")}
+            </span>
+          )}
+          {hasAnalysis && (
+            <span className="badge bg-indigo-50 text-indigo-600">AI</span>
+          )}
+        </div>
       </div>
 
       {/* 평점 */}

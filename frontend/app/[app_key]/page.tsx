@@ -24,7 +24,7 @@ export default function AppDetailPage({ params }: { params: Promise<{ app_key: s
 
   useEffect(() => {
     if (!appKey) return;
-    fetch(`/api/apps/${appKey}`)
+    fetch(`/api/apps/${appKey}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
