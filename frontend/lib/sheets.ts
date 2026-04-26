@@ -69,7 +69,7 @@ export const getAllApps = unstable_cache(
     }
   },
   ["all-apps"],
-  { revalidate: 120 }
+  { revalidate: 120, tags: ["all-apps"] }
 );
 
 export const getTexts = unstable_cache(

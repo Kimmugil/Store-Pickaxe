@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { getAllApps, registerAppToMaster } from "@/lib/sheets";
 import { slugify } from "@/lib/utils";
 
@@ -60,6 +61,9 @@ export async function POST(req: NextRequest) {
       icon_url: icon_url || "",
       spreadsheet_id,
     });
+
+    // 캐시 무효화 — 상세 페이지에서 바로 조회 가능하도록
+    revalidateTag("all-apps");
 
     return NextResponse.json({ ok: true, app_key, spreadsheet_id }, { status: 201 });
   } catch (e) {

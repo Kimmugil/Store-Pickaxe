@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Search, CheckCircle, ArrowRight, Plus } from "lucide-react";
+import { Search, CheckCircle, ArrowRight, Zap } from "lucide-react";
 import { useTexts } from "@/components/TextsProvider";
 import type { SearchResult, MatchSuggestion } from "@/lib/types";
 import { formatRating } from "@/lib/utils";
@@ -32,6 +32,8 @@ export default function AddPage() {
     if (!query.trim()) return;
     setLoading(true);
     setError("");
+    setSelectedGoogle(null);
+    setSelectedApple(null);
     try {
       const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
       const data = await res.json();
@@ -97,11 +99,15 @@ export default function AddPage() {
     );
   }
 
+  const hasSelection = selectedGoogle || selectedApple;
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-bold">{texts["add.title"] || "게임 등록"}</h1>
-        <p className="text-sm text-gray-400 mt-1">{texts["add.desc"] || "게임 이름으로 검색하세요."}</p>
+        <p className="text-sm text-gray-400 mt-1">
+          {texts["add.desc"] || "구글 플레이 또는 앱스토어에서 게임을 검색하세요."}
+        </p>
       </div>
 
       {/* 검색창 */}
@@ -123,71 +129,109 @@ export default function AddPage() {
 
       {step === "confirm" && (
         <>
-          {/* 자동 매칭 제안 */}
+          {/* ── 자동 매칭 제안 ── */}
           {suggestions.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-                {texts["add.match.auto_label"] || "자동 매칭 제안"}
-              </h2>
-              {suggestions.map((s, i) => (
-                <div
-                  key={i}
-                  className="card p-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition"
-                  onClick={() => applySuggestion(s)}
-                >
-                  <AppThumbnail result={s.google} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm">{s.google.name}</p>
-                    <p className="text-xs text-gray-400">{s.google.developer}</p>
+              <div className="flex items-center gap-2">
+                <Zap size={15} className="text-indigo-500" />
+                <h2 className="text-sm font-semibold text-gray-700">
+                  {texts["add.match.auto_label"] || "자동 매칭 제안"}
+                </h2>
+                <span className="text-xs text-gray-400">— 클릭하면 구글 + 애플 동시 선택됩니다</span>
+              </div>
+              {suggestions.map((s, i) => {
+                const isActive =
+                  selectedGoogle?.package_name === s.google.package_name &&
+                  selectedApple?.app_id === s.apple.app_id;
+                return (
+                  <div
+                    key={i}
+                    onClick={() => applySuggestion(s)}
+                    className={`card p-4 flex items-center gap-4 cursor-pointer transition border-2 ${
+                      isActive
+                        ? "border-gray-900 bg-gray-50"
+                        : "border-transparent hover:border-gray-200"
+                    }`}
+                  >
+                    <AppThumbnail result={s.google} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{s.google.name}</p>
+                      <p className="text-xs text-gray-400">{s.google.developer}</p>
+                    </div>
+                    {/* 구글 + 애플 아이콘 나란히 */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 bg-blue-50 rounded-lg px-2 py-1">
+                        <AppThumbnail result={s.google} small />
+                        <span className="text-xs text-blue-500 font-medium">G</span>
+                      </div>
+                      <span className="text-gray-300 text-sm">+</span>
+                      <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2 py-1">
+                        <AppThumbnail result={s.apple} small />
+                        <span className="text-xs text-gray-500 font-medium">A</span>
+                      </div>
+                      <ConfidenceBadge score={s.score} confidence={s.confidence} />
+                    </div>
+                    {isActive
+                      ? <CheckCircle size={18} className="text-gray-900 flex-shrink-0" />
+                      : <div className="w-[18px] h-[18px] rounded-full border-2 border-gray-200 flex-shrink-0" />
+                    }
                   </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <ConfidenceBadge score={s.score} confidence={s.confidence} texts={texts} />
-                    <span className="text-gray-300">+</span>
-                    <AppThumbnail result={s.apple} small />
-                  </div>
-                  <Plus size={16} className="text-gray-300 flex-shrink-0" />
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
-          {/* 결과 두 컬럼 */}
-          <div className="grid grid-cols-2 gap-6">
-            <ResultColumn
-              title={texts["add.tab.google"] || "구글 플레이"}
-              results={googleResults}
-              platform="google"
-              selected={selectedGoogle}
-              onSelect={setSelectedGoogle}
-              emptyText={texts["add.no_results.google"] || "결과 없음"}
-              color="#4285F4"
-            />
-            <ResultColumn
-              title={texts["add.tab.apple"] || "앱 스토어"}
-              results={appleResults}
-              platform="apple"
-              selected={selectedApple}
-              onSelect={setSelectedApple}
-              emptyText={texts["add.no_results.apple"] || "결과 없음"}
-              color="#555555"
-            />
+          {/* ── 수동 선택 (두 컬럼) ── */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <h2 className="text-sm font-semibold text-gray-700">
+                {suggestions.length > 0
+                  ? "직접 선택하기 (선택 사항)"
+                  : "검색 결과"}
+              </h2>
+              <span className="text-xs text-gray-400">
+                — 구글·애플 목록에서 각각 클릭하여 선택하세요
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-6">
+              <ResultColumn
+                title={texts["add.tab.google"] || "구글 플레이"}
+                results={googleResults}
+                platform="google"
+                selected={selectedGoogle}
+                onSelect={setSelectedGoogle}
+                emptyText={texts["add.no_results.google"] || "결과 없음"}
+                color="#4285F4"
+              />
+              <ResultColumn
+                title={texts["add.tab.apple"] || "앱 스토어"}
+                results={appleResults}
+                platform="apple"
+                selected={selectedApple}
+                onSelect={setSelectedApple}
+                emptyText={texts["add.no_results.apple"] || "결과 없음"}
+                color="#555555"
+              />
+            </div>
           </div>
 
-          {/* 등록 버튼 */}
-          {(selectedGoogle || selectedApple) && (
-            <div className="flex items-center justify-between card p-4">
+          {/* ── 등록 버튼 바 ── */}
+          {hasSelection && (
+            <div className="sticky bottom-4 flex items-center justify-between card p-4 shadow-lg border border-gray-200">
               <div className="text-sm">
-                <span className="font-medium">{selectedGoogle?.name || selectedApple?.name}</span>
-                <span className="text-gray-400 ml-2 text-xs">
+                <span className="font-semibold">{selectedGoogle?.name || selectedApple?.name}</span>
+                <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                   {selectedGoogle && selectedApple
-                    ? texts["common.platform.both"] || "Google + Apple"
+                    ? "Google + Apple"
                     : selectedGoogle
-                    ? texts["common.platform.google"] || "Google만"
-                    : texts["common.platform.apple"] || "Apple만"}
+                    ? "Google만"
+                    : "Apple만"}
                 </span>
               </div>
               <button className="btn-primary" onClick={handleRegister} disabled={registering}>
-                {registering ? (texts["common.loading"] || "등록 중...") : (texts["add.register.button"] || "등록")}
+                {registering
+                  ? (texts["common.loading"] || "등록 중...")
+                  : (texts["add.register.button"] || "등록하기")}
                 <ArrowRight size={14} />
               </button>
             </div>
@@ -217,13 +261,18 @@ function ResultColumn({
       ) : (
         results.map((r) => {
           const key = r.package_name || r.app_id || r.name;
-          const isSelected = selected?.package_name === r.package_name || selected?.app_id === r.app_id;
+          const isSelected =
+            platform === "google"
+              ? selected?.package_name === r.package_name
+              : selected?.app_id === r.app_id;
           return (
             <div
               key={key}
               onClick={() => onSelect(isSelected ? null : r)}
-              className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition border ${
-                isSelected ? "border-gray-900 bg-gray-50" : "border-transparent hover:bg-gray-50"
+              className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition border-2 ${
+                isSelected
+                  ? "border-gray-900 bg-gray-50"
+                  : "border-transparent hover:bg-gray-50 hover:border-gray-100"
               }`}
             >
               <AppThumbnail result={r} />
@@ -232,7 +281,10 @@ function ResultColumn({
                 <p className="text-xs text-gray-400 truncate">{r.developer}</p>
                 <p className="text-xs text-gray-400">★ {formatRating(r.rating)}</p>
               </div>
-              {isSelected && <CheckCircle size={16} className="text-gray-900 flex-shrink-0" />}
+              {isSelected
+                ? <CheckCircle size={16} className="text-gray-900 flex-shrink-0" />
+                : <div className="w-4 h-4 rounded-full border-2 border-gray-200 flex-shrink-0" />
+              }
             </div>
           );
         })
@@ -242,23 +294,29 @@ function ResultColumn({
 }
 
 function AppThumbnail({ result, small = false }: { result: SearchResult; small?: boolean }) {
-  const size = small ? 28 : 40;
+  const size = small ? 24 : 40;
   return result.icon_url ? (
-    <Image src={result.icon_url} alt={result.name} width={size} height={size}
-      className="rounded-lg flex-shrink-0" unoptimized />
+    <Image
+      src={result.icon_url}
+      alt={result.name}
+      width={size}
+      height={size}
+      className="rounded-lg flex-shrink-0"
+      unoptimized
+    />
   ) : (
     <div style={{ width: size, height: size }} className="rounded-lg bg-gray-100 flex-shrink-0" />
   );
 }
 
-function ConfidenceBadge({ score, confidence, texts }: { score: number; confidence: string; texts: Record<string, string> }) {
+function ConfidenceBadge({ score, confidence }: { score: number; confidence: string }) {
   const colorMap: Record<string, string> = {
     high: "bg-green-50 text-green-600",
     medium: "bg-yellow-50 text-yellow-600",
     low: "bg-gray-50 text-gray-500",
   };
   return (
-    <span className={`badge ${colorMap[confidence] || "bg-gray-50 text-gray-500"}`}>
+    <span className={`badge text-xs px-2 py-0.5 rounded-full ${colorMap[confidence] || "bg-gray-50 text-gray-500"}`}>
       {score}%
     </span>
   );
