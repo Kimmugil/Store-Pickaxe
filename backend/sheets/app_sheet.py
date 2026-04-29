@@ -219,16 +219,28 @@ def get_apple_reviews(spreadsheet_id: str) -> list[dict]:
 # ─── 타임라인 ────────────────────────────────────────────────────
 
 def save_timeline_event(spreadsheet_id: str, event: dict) -> str:
+    return save_timeline_events(spreadsheet_id, [event])[0]
+
+
+def save_timeline_events(spreadsheet_id: str, events: list[dict]) -> list[str]:
+    """여러 이벤트를 한 번의 API 호출로 저장 (헤더 중복 조회 방지)."""
+    if not events:
+        return []
     ss = _open(spreadsheet_id)
     ws = _ensure_timeline(ss)
-
-    event_id = event.get("event_id") or f"evt_{uuid.uuid4().hex[:8]}"
     headers = ws.row_values(1)
-    row_event = dict(event)
-    row_event["event_id"] = event_id
-    row = [str(row_event.get(h, "")) for h in headers]
-    ws.append_row(row, value_input_option="USER_ENTERED")
-    return event_id
+
+    ids = []
+    rows = []
+    for event in events:
+        event_id = event.get("event_id") or f"evt_{uuid.uuid4().hex[:8]}"
+        row_event = dict(event)
+        row_event["event_id"] = event_id
+        rows.append([str(row_event.get(h, "")) for h in headers])
+        ids.append(event_id)
+
+    ws.append_rows(rows, value_input_option="USER_ENTERED")
+    return ids
 
 
 def upsert_monthly_summaries(spreadsheet_id: str, monthly_rates: list[dict]) -> int:

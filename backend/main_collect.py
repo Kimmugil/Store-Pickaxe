@@ -232,6 +232,7 @@ def process_app(app: dict) -> None:
         all_g, all_a = [], []
 
     # ── 4. 이벤트 감지 ─────────────────────────────────────────
+    time.sleep(3)  # Sheets API 분당 할당량 초과 방지
     try:
         snapshots = asheet.get_snapshots(ss_id)
         existing_dates = asheet.get_existing_event_dates(ss_id)
@@ -241,13 +242,13 @@ def process_app(app: dict) -> None:
         new_events += sd.detect_version_change(snapshots, existing_dates)
         new_events += sd.detect_rating_shifts(snapshots, existing_dates, velocity)
         new_events += sd.detect_review_surge(snapshots, existing_dates)
-        # 리뷰 기반 긍정률 급변 감지 (snapshot 기반과 병행)
         if all_g or all_a:
             new_events += sd.detect_shifts_from_reviews(all_g, all_a, existing_dates, velocity)
 
-        for event in new_events:
-            asheet.save_timeline_event(ss_id, event)
-            log.info(f"[{app_key}] 이벤트: {event['event_type']} @ {event['event_date']}")
+        if new_events:
+            asheet.save_timeline_events(ss_id, new_events)
+            for event in new_events:
+                log.info(f"[{app_key}] 이벤트: {event['event_type']} @ {event['event_date']}")
 
     except Exception as e:
         log.error(f"[{app_key}] 이벤트 감지 실패: {e}")
