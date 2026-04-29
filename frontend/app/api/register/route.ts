@@ -6,7 +6,7 @@ import { slugify } from "@/lib/utils";
 async function triggerCollectWorkflow(appKey: string): Promise<void> {
   const token = process.env.GITHUB_PAT;
   const repo = process.env.GITHUB_REPO; // e.g. "Kimmugil/Store-Pickaxe"
-  if (!token || !repo) return;
+  if (!token || !repo) throw new Error("GITHUB_PAT 또는 GITHUB_REPO 환경변수 미설정");
 
   const res = await fetch(
     `https://api.github.com/repos/${repo}/actions/workflows/collect.yml/dispatches`,
@@ -107,11 +107,17 @@ export async function POST(req: NextRequest) {
     revalidateTag("all-apps");
 
     // 등록 직후 즉시 수집 트리거 (GitHub Actions workflow_dispatch)
-    triggerCollectWorkflow(app_key).catch((e) =>
-      console.error("[register] 워크플로우 트리거 실패 (다음 스케줄에서 수집됩니다):", e)
-    );
+    let collectTriggered = false;
+    let collectError: string | null = null;
+    try {
+      await triggerCollectWorkflow(app_key);
+      collectTriggered = true;
+    } catch (e) {
+      collectError = String(e);
+      console.error("[register] 워크플로우 트리거 실패:", e);
+    }
 
-    return NextResponse.json({ ok: true, app_key, spreadsheet_id }, { status: 201 });
+    return NextResponse.json({ ok: true, app_key, spreadsheet_id, collectTriggered, collectError }, { status: 201 });
   } catch (e) {
     return serverError(e, "예상치 못한 오류");
   }
