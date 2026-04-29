@@ -120,6 +120,11 @@ def collect_reviews(
         if page == 1 and entries and "im:name" in entries[0]:
             entries = entries[1:]
 
+        # DEBUG: 첫 페이지 첫 entry 구조 출력
+        if page == 1 and entries:
+            import json
+            _log.warning(f"[apple][DEBUG] entry 샘플: {json.dumps(entries[0], ensure_ascii=False)[:500]}")
+
         page_new = 0
         for entry in entries:
             rid = _extract_id(entry)
