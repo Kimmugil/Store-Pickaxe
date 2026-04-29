@@ -6,7 +6,11 @@ import { slugify } from "@/lib/utils";
 async function triggerCollectWorkflow(appKey: string): Promise<void> {
   const token = process.env.GITHUB_PAT;
   const repo = process.env.GITHUB_REPO; // e.g. "Kimmugil/Store-Pickaxe"
-  if (!token || !repo) throw new Error("GITHUB_PAT 또는 GITHUB_REPO 환경변수 미설정");
+
+  if (!token) throw new Error("GITHUB_PAT 환경변수 미설정");
+  if (!repo) throw new Error("GITHUB_REPO 환경변수 미설정");
+
+  console.log(`[register] GitHub Actions 트리거 시도: repo=${repo}, app_key=${appKey}`);
 
   const res = await fetch(
     `https://api.github.com/repos/${repo}/actions/workflows/collect.yml/dispatches`,
@@ -16,6 +20,7 @@ async function triggerCollectWorkflow(appKey: string): Promise<void> {
         Authorization: `Bearer ${token}`,
         Accept: "application/vnd.github+json",
         "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
       },
       body: JSON.stringify({
         ref: "master",
@@ -23,10 +28,18 @@ async function triggerCollectWorkflow(appKey: string): Promise<void> {
       }),
     }
   );
+
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`GitHub API ${res.status}: ${text}`);
+    let hint = "";
+    if (res.status === 401) hint = " — PAT이 만료되었거나 잘못됨";
+    else if (res.status === 403) hint = " — PAT에 Actions:write 권한 없음 (GitHub → Settings → Developer settings → PAT → Actions:Read&Write 필요)";
+    else if (res.status === 404) hint = " — repo 이름이 잘못되었거나 PAT이 해당 repo에 접근 불가";
+    else if (res.status === 422) hint = " — ref(브랜치) 오류 또는 workflow_dispatch 설정 문제";
+    throw new Error(`GitHub API ${res.status}${hint}: ${text}`);
   }
+
+  console.log(`[register] GitHub Actions 트리거 성공 (204): ${repo}/collect.yml → ${appKey}`);
 }
 
 function serverError(e: unknown, context: string): NextResponse {
