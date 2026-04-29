@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       console.error("[register] 워크플로우 트리거 실패:", e);
     }
 
-    return NextResponse.json({ ok: true, app_key, spreadsheet_id, collectTriggered, collectError }, { status: 201 });
+    return NextResponse.json({ ok: true, app_key, spreadsheet_id, collectTriggered, collectError, _debug: { google_package: google_package || "", apple_app_id: String(apple_app_id || "") } }, { status: 201 });
   } catch (e) {
     return serverError(e, "예상치 못한 오류");
   }
