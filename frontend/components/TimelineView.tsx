@@ -11,7 +11,8 @@ interface Props {
   analyses: Analysis[];
 }
 
-const EVENT_ICONS: Record<string, ({ size }: { size?: number }) => JSX.Element> = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const EVENT_ICONS: Record<string, any> = {
   version_release: Tag,
   sentiment_shift: AlertTriangle,
   review_surge: Zap,
