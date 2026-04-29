@@ -3,6 +3,32 @@ import { revalidateTag } from "next/cache";
 import { getAllApps, registerAppToMaster } from "@/lib/sheets";
 import { slugify } from "@/lib/utils";
 
+async function triggerCollectWorkflow(appKey: string): Promise<void> {
+  const token = process.env.GITHUB_PAT;
+  const repo = process.env.GITHUB_REPO; // e.g. "Kimmugil/Store-Pickaxe"
+  if (!token || !repo) return;
+
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/actions/workflows/collect.yml/dispatches`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ref: "master",
+        inputs: { target_app_key: appKey },
+      }),
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`GitHub API ${res.status}: ${text}`);
+  }
+}
+
 function serverError(e: unknown, context: string): NextResponse {
   console.error(`[register] ${context}:`, e);
   return NextResponse.json({ error: "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요." }, { status: 500 });
@@ -79,6 +105,11 @@ export async function POST(req: NextRequest) {
 
     // 캐시 무효화 — 상세 페이지에서 바로 조회 가능하도록
     revalidateTag("all-apps");
+
+    // 등록 직후 즉시 수집 트리거 (GitHub Actions workflow_dispatch)
+    triggerCollectWorkflow(app_key).catch((e) =>
+      console.error("[register] 워크플로우 트리거 실패 (다음 스케줄에서 수집됩니다):", e)
+    );
 
     return NextResponse.json({ ok: true, app_key, spreadsheet_id }, { status: 201 });
   } catch (e) {
