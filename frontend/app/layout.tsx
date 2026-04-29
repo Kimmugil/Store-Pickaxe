@@ -17,7 +17,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="ko">
-      <body>
+      <body style={{ background: "#FAFAFA" }}>
         <TextsProvider texts={texts}>
           <NavBar />
           <main className="max-w-6xl mx-auto px-4 py-8">{children}</main>

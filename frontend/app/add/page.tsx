@@ -82,17 +82,34 @@ export default function AddPage() {
     setSelectedApple(s.apple);
   }
 
-  // ── 완료 화면 ──
+  // Done screen
   if (step === "done") {
     return (
-      <div className="max-w-md mx-auto text-center py-16 space-y-4">
-        <CheckCircle size={48} className="mx-auto text-positive" />
-        <h2 className="text-xl font-bold">{texts["add.success.title"] || "등록 완료!"}</h2>
-        <p className="text-sm text-gray-500">{texts["add.success.desc"] || "게임이 등록되었습니다."}</p>
-        <p className="text-xs text-gray-400 bg-yellow-50 rounded-xl px-4 py-3">
+      <div className="max-w-md mx-auto text-center py-20 space-y-6">
+        <div
+          className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center text-3xl"
+          style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
+        >
+          ✓
+        </div>
+        <div>
+          <h2 className="font-black text-2xl text-[#1A1A1A]">
+            {texts["add.success.title"] || "등록 완료!"}
+          </h2>
+          <p className="text-sm text-[#4A4A4A] mt-2">
+            {texts["add.success.desc"] || "게임이 등록되었습니다."}
+          </p>
+        </div>
+        <div
+          className="text-xs text-[#4A4A4A] rounded-2xl px-5 py-4 text-left"
+          style={{ background: "#FFFDE7", border: "2px solid #1A1A1A" }}
+        >
           {texts["add.pending_ai.notice"] || "리뷰 수집이 즉시 시작됩니다. AI 분석은 관리자 승인 후 자동으로 진행됩니다."}
-        </p>
-        <button onClick={() => router.push(`/${registeredKey}`)} className="btn-primary mt-4">
+        </div>
+        <button
+          onClick={() => router.push(`/${registeredKey}`)}
+          className="neo-button-primary"
+        >
           {texts["common.view"] || "상세 보기"} <ArrowRight size={14} />
         </button>
       </div>
@@ -102,43 +119,63 @@ export default function AddPage() {
   const hasSelection = selectedGoogle || selectedApple;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-8 pb-28">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">{texts["add.title"] || "게임 등록"}</h1>
-        <p className="text-sm text-gray-400 mt-1">
+        <h1 className="font-black text-3xl text-[#1A1A1A]">
+          {texts["add.title"] || "게임 등록"}
+        </h1>
+        <p className="text-sm text-[#9CA3AF] mt-1 font-medium">
           {texts["add.desc"] || "구글 플레이 또는 앱스토어에서 게임을 검색하세요."}
         </p>
       </div>
 
-      {/* 검색창 */}
-      <div className="flex gap-2">
+      {/* Search bar */}
+      <div className="neo-input-wrap">
+        <Search size={16} color="#9CA3AF" />
         <input
-          className="input"
           placeholder={texts["add.search.placeholder"] || "게임 이름 입력..."}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
         />
-        <button className="btn-primary flex-shrink-0" onClick={handleSearch} disabled={loading}>
-          <Search size={16} />
+        <button
+          className="neo-button-dark text-sm py-1.5 px-4 flex-shrink-0"
+          onClick={handleSearch}
+          disabled={loading}
+          style={{ border: "none", boxShadow: "none" }}
+        >
           {loading ? (texts["common.loading"] || "검색 중...") : (texts["add.search.button"] || "검색")}
         </button>
       </div>
 
-      {error && <p className="text-sm text-negative">{error}</p>}
+      {error && (
+        <p
+          className="text-sm font-bold px-4 py-3 rounded-xl"
+          style={{ color: "#FF6B6B", background: "#FFF5F5", border: "2px solid #FF6B6B" }}
+        >
+          {error}
+        </p>
+      )}
 
       {step === "confirm" && (
         <>
-          {/* ── 자동 매칭 제안 ── */}
+          {/* Auto-match suggestions */}
           {suggestions.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Zap size={15} className="text-indigo-500" />
-                <h2 className="text-sm font-semibold text-gray-700">
+                <div
+                  className="w-6 h-6 rounded-lg flex items-center justify-center"
+                  style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
+                >
+                  <Zap size={13} color="#1A1A1A" />
+                </div>
+                <h2 className="font-black text-sm text-[#1A1A1A]">
                   {texts["add.match.auto_label"] || "자동 매칭 제안"}
                 </h2>
-                <span className="text-xs text-gray-400">— 클릭하면 구글 + 애플 동시 선택됩니다</span>
+                <span className="text-xs text-[#9CA3AF]">— 클릭하면 구글 + 애플 동시 선택</span>
               </div>
+
               {suggestions.map((s, i) => {
                 const isActive =
                   selectedGoogle?.package_name === s.google.package_name &&
@@ -147,33 +184,45 @@ export default function AddPage() {
                   <div
                     key={i}
                     onClick={() => applySuggestion(s)}
-                    className={`card p-4 flex items-center gap-4 cursor-pointer transition border-2 ${
+                    className="neo-card p-4 flex items-center gap-4"
+                    style={
                       isActive
-                        ? "border-gray-900 bg-gray-50"
-                        : "border-transparent hover:border-gray-200"
-                    }`}
+                        ? { background: "#FFFDE7", borderColor: "#1A1A1A" }
+                        : {}
+                    }
                   >
                     <AppThumbnail result={s.google} />
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm">{s.google.name}</p>
-                      <p className="text-xs text-gray-400">{s.google.developer}</p>
+                      <p className="font-black text-sm text-[#1A1A1A]">{s.google.name}</p>
+                      <p className="text-xs text-[#9CA3AF]">{s.google.developer}</p>
                     </div>
-                    {/* 구글 + 애플 아이콘 나란히 */}
+                    {/* Platform badges */}
                     <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1.5 bg-blue-50 rounded-lg px-2 py-1">
+                      <div
+                        className="flex items-center gap-1.5 rounded-lg px-2 py-1"
+                        style={{ background: "#EBF3FF", border: "1.5px solid #4285F4" }}
+                      >
                         <AppThumbnail result={s.google} small />
-                        <span className="text-xs text-blue-500 font-medium">G</span>
+                        <span className="text-xs font-bold" style={{ color: "#4285F4" }}>G</span>
                       </div>
-                      <span className="text-gray-300 text-sm">+</span>
-                      <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2 py-1">
+                      <span className="text-[#9CA3AF] text-sm font-bold">+</span>
+                      <div
+                        className="flex items-center gap-1.5 rounded-lg px-2 py-1"
+                        style={{ background: "#F0EFEC", border: "1.5px solid #1A1A1A" }}
+                      >
                         <AppThumbnail result={s.apple} small />
-                        <span className="text-xs text-gray-500 font-medium">A</span>
+                        <span className="text-xs font-bold text-[#1A1A1A]">A</span>
                       </div>
                       <ConfidenceBadge score={s.score} confidence={s.confidence} />
                     </div>
                     {isActive
-                      ? <CheckCircle size={18} className="text-gray-900 flex-shrink-0" />
-                      : <div className="w-[18px] h-[18px] rounded-full border-2 border-gray-200 flex-shrink-0" />
+                      ? <CheckCircle size={18} color="#1A1A1A" className="flex-shrink-0" />
+                      : (
+                        <div
+                          className="w-[18px] h-[18px] rounded-full flex-shrink-0"
+                          style={{ border: "2px solid #E2E8F0" }}
+                        />
+                      )
                     }
                   </div>
                 );
@@ -181,19 +230,19 @@ export default function AddPage() {
             </div>
           )}
 
-          {/* ── 수동 선택 (두 컬럼) ── */}
+          {/* Manual selection */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <h2 className="text-sm font-semibold text-gray-700">
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="font-black text-sm text-[#1A1A1A]">
                 {suggestions.length > 0
                   ? "직접 선택하기 (선택 사항)"
                   : "검색 결과"}
               </h2>
-              <span className="text-xs text-gray-400">
-                — 구글·애플 목록에서 각각 클릭하여 선택하세요
+              <span className="text-xs text-[#9CA3AF]">
+                — 구글·애플 목록에서 각각 클릭하여 선택
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-5">
               <ResultColumn
                 title={texts["add.tab.google"] || "구글 플레이"}
                 results={googleResults}
@@ -210,17 +259,47 @@ export default function AddPage() {
                 selected={selectedApple}
                 onSelect={setSelectedApple}
                 emptyText={texts["add.no_results.apple"] || "결과 없음"}
-                color="#555555"
+                color="#1A1A1A"
               />
             </div>
           </div>
+        </>
+      )}
 
-          {/* ── 등록 버튼 바 ── */}
-          {hasSelection && (
-            <div className="sticky bottom-4 flex items-center justify-between card p-4 shadow-lg border border-gray-200">
-              <div className="text-sm">
-                <span className="font-semibold">{selectedGoogle?.name || selectedApple?.name}</span>
-                <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+      {/* Sticky bottom action bar */}
+      {hasSelection && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-40 p-4"
+          style={{ background: "transparent" }}
+        >
+          <div
+            className="max-w-4xl mx-auto flex items-center justify-between gap-4 rounded-2xl px-5 py-4"
+            style={{
+              background: "#FFFFFF",
+              border: "2px solid #1A1A1A",
+              boxShadow: "4px 4px 0px 0px #1A1A1A",
+            }}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              {(selectedGoogle?.icon_url || selectedApple?.icon_url) && (
+                <Image
+                  src={selectedGoogle?.icon_url || selectedApple?.icon_url || ""}
+                  alt=""
+                  width={36}
+                  height={36}
+                  className="rounded-xl flex-shrink-0"
+                  style={{ border: "1.5px solid #1A1A1A" }}
+                  unoptimized
+                />
+              )}
+              <div className="min-w-0">
+                <p className="font-black text-sm text-[#1A1A1A] truncate">
+                  {selectedGoogle?.name || selectedApple?.name}
+                </p>
+                <span
+                  className="text-xs font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: "#F0EFEC", border: "1.5px solid #1A1A1A", color: "#4A4A4A" }}
+                >
                   {selectedGoogle && selectedApple
                     ? "Google + Apple"
                     : selectedGoogle
@@ -228,15 +307,19 @@ export default function AddPage() {
                     : "Apple만"}
                 </span>
               </div>
-              <button className="btn-primary" onClick={handleRegister} disabled={registering}>
-                {registering
-                  ? (texts["common.loading"] || "등록 중...")
-                  : (texts["add.register.button"] || "등록하기")}
-                <ArrowRight size={14} />
-              </button>
             </div>
-          )}
-        </>
+            <button
+              className="neo-button-primary flex-shrink-0"
+              onClick={handleRegister}
+              disabled={registering}
+            >
+              {registering
+                ? (texts["common.loading"] || "등록 중...")
+                : (texts["add.register.button"] || "등록하기")}
+              <ArrowRight size={14} />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -255,9 +338,14 @@ function ResultColumn({
 }) {
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold" style={{ color }}>{title}</h3>
+      <h3 className="font-black text-sm" style={{ color }}>{title}</h3>
       {results.length === 0 ? (
-        <p className="text-xs text-gray-400 py-4 text-center">{emptyText}</p>
+        <div
+          className="flex items-center justify-center py-10 rounded-2xl"
+          style={{ border: "2px dashed #E2E8F0", background: "#FAFAFA" }}
+        >
+          <p className="text-xs text-[#9CA3AF] font-medium">{emptyText}</p>
+        </div>
       ) : (
         results.map((r) => {
           const key = r.package_name || r.app_id || r.name;
@@ -269,21 +357,34 @@ function ResultColumn({
             <div
               key={key}
               onClick={() => onSelect(isSelected ? null : r)}
-              className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition border-2 ${
+              className="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all"
+              style={
                 isSelected
-                  ? "border-gray-900 bg-gray-50"
-                  : "border-transparent hover:bg-gray-50 hover:border-gray-100"
-              }`}
+                  ? {
+                      background: "#FFFDE7",
+                      border: "2px solid #1A1A1A",
+                      boxShadow: "2px 2px 0px 0px #1A1A1A",
+                    }
+                  : {
+                      background: "#FFFFFF",
+                      border: "2px solid #E2E8F0",
+                    }
+              }
             >
               <AppThumbnail result={r} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{r.name}</p>
-                <p className="text-xs text-gray-400 truncate">{r.developer}</p>
-                <p className="text-xs text-gray-400">★ {formatRating(r.rating)}</p>
+                <p className="text-sm font-black truncate text-[#1A1A1A]">{r.name}</p>
+                <p className="text-xs text-[#9CA3AF] truncate">{r.developer}</p>
+                <p className="text-xs font-bold text-[#9CA3AF]">★ {formatRating(r.rating)}</p>
               </div>
               {isSelected
-                ? <CheckCircle size={16} className="text-gray-900 flex-shrink-0" />
-                : <div className="w-4 h-4 rounded-full border-2 border-gray-200 flex-shrink-0" />
+                ? <CheckCircle size={16} color="#1A1A1A" className="flex-shrink-0" />
+                : (
+                  <div
+                    className="w-4 h-4 rounded-full flex-shrink-0"
+                    style={{ border: "2px solid #E2E8F0" }}
+                  />
+                )
               }
             </div>
           );
@@ -301,22 +402,30 @@ function AppThumbnail({ result, small = false }: { result: SearchResult; small?:
       alt={result.name}
       width={size}
       height={size}
-      className="rounded-lg flex-shrink-0"
+      className="rounded-xl flex-shrink-0"
+      style={{ border: "1.5px solid #1A1A1A" }}
       unoptimized
     />
   ) : (
-    <div style={{ width: size, height: size }} className="rounded-lg bg-gray-100 flex-shrink-0" />
+    <div
+      style={{ width: size, height: size, background: "#F0EFEC", border: "1.5px solid #1A1A1A" }}
+      className="rounded-xl flex-shrink-0"
+    />
   );
 }
 
 function ConfidenceBadge({ score, confidence }: { score: number; confidence: string }) {
-  const colorMap: Record<string, string> = {
-    high: "bg-green-50 text-green-600",
-    medium: "bg-yellow-50 text-yellow-600",
-    low: "bg-gray-50 text-gray-500",
+  const styleMap: Record<string, { background: string; color: string; border: string }> = {
+    high:   { background: "#F0FFF4", color: "#16A34A", border: "1.5px solid #16A34A" },
+    medium: { background: "#FFFDE7", color: "#B7960A", border: "1.5px solid #B7960A" },
+    low:    { background: "#F0EFEC", color: "#9CA3AF", border: "1.5px solid #9CA3AF" },
   };
+  const s = styleMap[confidence] || styleMap.low;
   return (
-    <span className={`badge text-xs px-2 py-0.5 rounded-full ${colorMap[confidence] || "bg-gray-50 text-gray-500"}`}>
+    <span
+      className="text-xs font-black px-2 py-0.5 rounded-full"
+      style={s}
+    >
       {score}%
     </span>
   );

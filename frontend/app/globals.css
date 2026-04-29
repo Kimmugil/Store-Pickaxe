@@ -6,46 +6,252 @@
 @layer base {
   :root {
     --google: #4285F4;
-    --apple: #555555;
+    --apple: #1A1A1A;
+    --accent: #FFD600;
+    --positive: #56D0A0;
+    --negative: #FF6B6B;
+    --border: #1A1A1A;
+    --surface: #FFFFFF;
+    --raised: #F0EFEC;
+    --text-primary: #1A1A1A;
+    --text-secondary: #4A4A4A;
+    --text-muted: #9CA3AF;
   }
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
-    font-family: "Pretendard", system-ui, sans-serif;
+    background-color: #FAFAFA;
+    color: #1A1A1A;
+    @apply antialiased;
+    font-family: "Pretendard", "Inter", system-ui, sans-serif;
   }
 }
 
 @layer components {
+  /* ── Neo-Brutalism Core ── */
+  .neo-card {
+    background: #FFFFFF;
+    border: 2px solid #1A1A1A;
+    border-radius: 16px;
+    cursor: pointer;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+    transition: box-shadow 0.1s ease, transform 0.1s ease;
+  }
+  .neo-card:hover {
+    box-shadow: 4px 4px 0px 0px #1A1A1A;
+    transform: translate(-1px, -1px);
+  }
+  .neo-card:active {
+    box-shadow: 0px 0px 0px 0px #1A1A1A;
+    transform: translate(2px, 2px);
+  }
+  .neo-card-static {
+    background: #FFFFFF;
+    border: 2px solid #1A1A1A;
+    border-radius: 16px;
+    cursor: default;
+    box-shadow: none;
+  }
+  .neo-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    font-weight: 800;
+    font-size: 14px;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+    transition: box-shadow 0.1s ease, transform 0.1s ease;
+    cursor: pointer;
+  }
+  .neo-button:hover {
+    box-shadow: 3px 3px 0px 0px #1A1A1A;
+    transform: translate(-1px, -1px);
+  }
+  .neo-button:active {
+    box-shadow: 0px 0px 0px 0px #1A1A1A;
+    transform: translate(2px, 2px);
+  }
+  .neo-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+  }
+  .neo-button-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    font-weight: 800;
+    font-size: 14px;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+    transition: box-shadow 0.1s ease, transform 0.1s ease;
+    cursor: pointer;
+    background-color: #FFD600;
+    color: #1A1A1A;
+  }
+  .neo-button-primary:hover { box-shadow: 3px 3px 0px 0px #1A1A1A; transform: translate(-1px, -1px); }
+  .neo-button-primary:active { box-shadow: 0px 0px 0px 0px #1A1A1A; transform: translate(2px, 2px); }
+  .neo-button-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: 2px 2px 0px 0px #1A1A1A; }
+  .neo-button-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    font-weight: 800;
+    font-size: 14px;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+    transition: box-shadow 0.1s ease, transform 0.1s ease;
+    cursor: pointer;
+    background-color: #F0EFEC;
+    color: #1A1A1A;
+  }
+  .neo-button-secondary:hover { box-shadow: 3px 3px 0px 0px #1A1A1A; transform: translate(-1px, -1px); }
+  .neo-button-secondary:active { box-shadow: 0px 0px 0px 0px #1A1A1A; transform: translate(2px, 2px); }
+  .neo-button-secondary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: 2px 2px 0px 0px #1A1A1A; }
+  .neo-button-dark {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    font-weight: 800;
+    font-size: 14px;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+    transition: box-shadow 0.1s ease, transform 0.1s ease;
+    cursor: pointer;
+    background-color: #1A1A1A;
+    color: #FFFFFF;
+  }
+  .neo-button-dark:hover { box-shadow: 3px 3px 0px 0px #1A1A1A; transform: translate(-1px, -1px); }
+  .neo-button-dark:active { box-shadow: 0px 0px 0px 0px #1A1A1A; transform: translate(2px, 2px); }
+  .neo-button-dark:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: 2px 2px 0px 0px #1A1A1A; }
+  .neo-input-wrap {
+    display: flex;
+    align-items: center;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    background: #FFFFFF;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+    padding: 0 16px;
+    gap: 8px;
+  }
+  .neo-input-wrap input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 14px;
+    color: #1A1A1A;
+    padding: 10px 0;
+    font-family: inherit;
+  }
+  .neo-input-wrap input::placeholder {
+    color: #9CA3AF;
+  }
+
+  /* ── Legacy classes (kept for backward compat, updated to neo style) ── */
   .card {
-    @apply bg-white rounded-2xl border border-gray-100 shadow-sm;
+    background: #FFFFFF;
+    border: 2px solid #1A1A1A;
+    border-radius: 16px;
+    box-shadow: none;
   }
   .badge {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
-  }
-  .btn {
-    @apply inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium
-           transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold;
+    border: 1.5px solid currentColor;
   }
   .btn-primary {
-    @apply btn bg-gray-900 text-white hover:bg-gray-700;
+    @apply inline-flex items-center gap-1.5 px-4 py-2 text-sm font-extrabold
+           transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+    background-color: #FFD600;
+    color: #1A1A1A;
   }
+  .btn-primary:hover:not(:disabled) { box-shadow: 3px 3px 0px 0px #1A1A1A; transform: translate(-1px, -1px); }
+  .btn-primary:active:not(:disabled) { box-shadow: 0px 0px 0px 0px #1A1A1A; transform: translate(2px, 2px); }
   .btn-secondary {
-    @apply btn bg-white text-gray-700 border border-gray-200 hover:bg-gray-50;
+    @apply inline-flex items-center gap-1.5 px-4 py-2 text-sm font-extrabold
+           transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+    background-color: #F0EFEC;
+    color: #1A1A1A;
   }
+  .btn-secondary:hover:not(:disabled) { box-shadow: 3px 3px 0px 0px #1A1A1A; transform: translate(-1px, -1px); }
+  .btn-secondary:active:not(:disabled) { box-shadow: 0px 0px 0px 0px #1A1A1A; transform: translate(2px, 2px); }
   .btn-danger {
-    @apply btn bg-red-600 text-white hover:bg-red-700;
+    @apply inline-flex items-center gap-1.5 px-4 py-2 text-sm font-extrabold
+           transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+    background-color: #1A1A1A;
+    color: #FFFFFF;
   }
+  .btn-danger:hover:not(:disabled) { box-shadow: 3px 3px 0px 0px #1A1A1A; transform: translate(-1px, -1px); }
+  .btn-danger:active:not(:disabled) { box-shadow: 0px 0px 0px 0px #1A1A1A; transform: translate(2px, 2px); }
   .input {
-    @apply w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white
-           text-sm placeholder-gray-400
-           focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent;
+    @apply w-full px-4 py-2.5 text-sm;
+    border: 2px solid #1A1A1A;
+    border-radius: 12px;
+    background: #FFFFFF;
+    color: #1A1A1A;
+    font-family: inherit;
+    outline: none;
+    box-shadow: 2px 2px 0px 0px #1A1A1A;
+  }
+  .input:focus {
+    box-shadow: 3px 3px 0px 0px #1A1A1A;
+  }
+  .input::placeholder {
+    color: #9CA3AF;
   }
   .tab {
-    @apply px-4 py-2 text-sm font-medium rounded-lg transition-colors;
+    @apply px-4 py-2 text-sm font-bold transition-all;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
   }
   .tab-active {
-    @apply tab bg-gray-900 text-white;
+    @apply px-4 py-2 text-sm font-bold transition-all;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    background: #1A1A1A;
+    color: #FFFFFF;
+    box-shadow: 2px 2px 0px 0px #9CA3AF;
   }
   .tab-inactive {
-    @apply tab text-gray-500 hover:text-gray-900 hover:bg-gray-100;
+    @apply px-4 py-2 text-sm font-bold transition-all;
+    border: 2px solid #1A1A1A;
+    border-radius: 9999px;
+    background: #F0EFEC;
+    color: #9CA3AF;
+  }
+  .tab-inactive:hover {
+    color: #1A1A1A;
+  }
+
+  /* ── Color utilities ── */
+  .text-positive { color: #56D0A0; }
+  .text-negative { color: #FF6B6B; }
+  .bg-positive { background-color: #56D0A0; }
+  .bg-negative { background-color: #FF6B6B; }
+  .bg-accent { background-color: #FFD600; }
+
+  /* ── Stagger animation ── */
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-slide-up {
+    animation: slideUp 0.3s ease forwards;
   }
 }
