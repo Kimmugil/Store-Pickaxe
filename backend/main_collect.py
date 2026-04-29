@@ -187,7 +187,8 @@ def process_app(app: dict) -> None:
                 existing_ids = asheet.get_existing_review_ids(ss_id, "google")
                 new_g = gc.collect_reviews(google_pkg, existing_ids)
                 saved = asheet.save_google_reviews(ss_id, new_g)
-                any_collection_succeeded = True
+                if saved > 0:
+                    any_collection_succeeded = True
                 log.info(f"[{app_key}] 구글 리뷰 +{saved}개")
             except Exception as e:
                 log.error(f"[{app_key}] 구글 리뷰 수집 실패: {e}")
@@ -199,7 +200,8 @@ def process_app(app: dict) -> None:
                 existing_ids = asheet.get_existing_review_ids(ss_id, "apple")
                 new_a = ac.collect_reviews(apple_id, existing_ids)
                 saved = asheet.save_apple_reviews(ss_id, new_a)
-                any_collection_succeeded = True
+                if saved > 0:
+                    any_collection_succeeded = True
                 log.info(f"[{app_key}] 애플 리뷰 +{saved}개")
             except Exception as e:
                 log.error(f"[{app_key}] 애플 리뷰 수집 실패: {e}")
