@@ -29,6 +29,9 @@ jobs:
       - name: 의존성 설치
         run: pip install -r requirements.txt
 
+      - name: Playwright 브라우저 설치
+        run: playwright install chromium --with-deps
+
       - name: 리뷰 수집 실행
         env:
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
