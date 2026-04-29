@@ -14,7 +14,13 @@ _SEARCH_URL = "https://itunes.apple.com/search"
 _LOOKUP_URL = "https://itunes.apple.com/lookup"
 _REVIEWS_URL = "https://itunes.apple.com/{country}/rss/customerreviews/page={page}/id={app_id}/sortby=mostrecent/json"
 
-_HEADERS = {"User-Agent": "Store-Pickaxe/1.0"}
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+}
 
 
 def search_apps(query: str, n: int = 10, country: str = "kr") -> list[dict]:
@@ -110,16 +116,19 @@ def collect_reviews(
             break
 
         if not entries:
+            _log.info(f"[apple] 페이지 {page} — entries 없음 (app_id={app_id}), 종료")
             break
 
         # Apple RSS가 단일 리뷰일 때 dict로 반환하는 경우 대응
         if isinstance(entries, dict):
             entries = [entries]
 
+        _log.info(f"[apple] 페이지 {page} — entries {len(entries)}개 (app_id={app_id})")
+
         # 첫 entry는 앱 메타이므로 건너뜀
         if page == 1 and entries and "im:name" in entries[0]:
+            _log.info(f"[apple] 페이지 1 — 첫 entry(앱 메타) 건너뜀, 남은 entries: {len(entries)-1}개")
             entries = entries[1:]
-
 
         page_new = 0
         for entry in entries:
@@ -133,9 +142,12 @@ def collect_reviews(
                     existing_ids.add(rid)
                     page_new += 1
 
+        _log.info(f"[apple] 페이지 {page} — 신규 리뷰 {page_new}개 추가")
+
         # 이 페이지에 새 리뷰가 하나도 없으면 조기 종료
         # existing_ids가 비어도 page_new==0이면 읽을 리뷰가 없는 것
         if page_new == 0:
+            _log.info(f"[apple] 페이지 {page} — 신규 없음, 수집 종료")
             break
 
         # 마지막 페이지까지 소진한 경우 경고
