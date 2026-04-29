@@ -40,6 +40,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ key:
 
     return NextResponse.json(detail);
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    console.error(`[apps/${key}] 상세 조회 실패:`, e);
+    return NextResponse.json({ error: "앱 정보를 불러올 수 없습니다." }, { status: 500 });
   }
 }

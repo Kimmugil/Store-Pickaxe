@@ -3,6 +3,11 @@ import { revalidateTag } from "next/cache";
 import { getAllApps, registerAppToMaster } from "@/lib/sheets";
 import { slugify } from "@/lib/utils";
 
+function serverError(e: unknown, context: string): NextResponse {
+  console.error(`[register] ${context}:`, e);
+  return NextResponse.json({ error: "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요." }, { status: 500 });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -34,39 +39,49 @@ export async function POST(req: NextRequest) {
     const credsRaw = process.env.GOOGLE_CREDENTIALS_JSON!;
     const creds = JSON.parse(credsRaw);
 
-    const gasResp = await fetch(gasUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        folderId,
-        fileName: `Store-Pickaxe | ${app_name} (${app_key})`,
-        serviceAccountEmail: creds.client_email,
-      }),
-    });
-
-    const gasData = await gasResp.json();
-    if (!gasData.ok) {
-      return NextResponse.json({ error: `스프레드시트 생성 실패: ${gasData.error}` }, { status: 500 });
+    let gasData: { ok: boolean; spreadsheetId?: string; error?: string };
+    try {
+      const gasResp = await fetch(gasUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          folderId,
+          fileName: `Store-Pickaxe | ${app_name} (${app_key})`,
+          serviceAccountEmail: creds.client_email,
+        }),
+      });
+      gasData = await gasResp.json();
+    } catch (e) {
+      return serverError(e, "GAS fetch 실패");
     }
 
-    const spreadsheet_id = gasData.spreadsheetId;
+    if (!gasData.ok) {
+      console.error("[register] GAS 오류:", gasData.error);
+      return NextResponse.json({ error: "스프레드시트 생성에 실패했습니다. 설정을 확인해주세요." }, { status: 500 });
+    }
+
+    const spreadsheet_id = gasData.spreadsheetId!;
 
     // MASTER 시트에 등록
-    await registerAppToMaster({
-      app_key,
-      app_name,
-      developer: developer || "",
-      google_package: google_package || "",
-      apple_app_id: String(apple_app_id || ""),
-      icon_url: icon_url || "",
-      spreadsheet_id,
-    });
+    try {
+      await registerAppToMaster({
+        app_key,
+        app_name,
+        developer: developer || "",
+        google_package: google_package || "",
+        apple_app_id: String(apple_app_id || ""),
+        icon_url: icon_url || "",
+        spreadsheet_id,
+      });
+    } catch (e) {
+      return serverError(e, "MASTER 시트 등록 실패");
+    }
 
     // 캐시 무효화 — 상세 페이지에서 바로 조회 가능하도록
     revalidateTag("all-apps");
 
     return NextResponse.json({ ok: true, app_key, spreadsheet_id }, { status: 201 });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return serverError(e, "예상치 못한 오류");
   }
 }

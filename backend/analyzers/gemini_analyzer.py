@@ -3,13 +3,19 @@ Gemini AI 분석 엔진
 이벤트 기반 트리거에서만 호출됨 (모든 버전 분석 X)
 """
 import json
+import logging
 import re
+import time
 from datetime import datetime, timezone
 
 from google import genai
 from google.genai import types
 
 from backend.config import get_env, ai_model
+
+log = logging.getLogger(__name__)
+
+_RETRY_DELAYS = (5, 15, 45)  # 3회 재시도: 5초, 15초, 45초 대기
 
 
 def _client() -> genai.Client:
@@ -48,7 +54,10 @@ def analyze(
 def _build_prompt(google_reviews: list[dict], apple_reviews: list[dict], period_label: str) -> str:
     def fmt_review(r: dict, platform: str) -> str:
         rating = r.get("rating", "?")
-        content = (r.get("content") or "").strip()[:300]
+        raw_content = (r.get("content") or "").strip()
+        content = raw_content[:500]
+        if len(raw_content) > 500:
+            content += "…"
         ver = r.get("app_version", "")
         title = r.get("title", "")
         if title:
@@ -81,16 +90,32 @@ def _build_prompt(google_reviews: list[dict], apple_reviews: list[dict], period_
 
 
 def _call_gemini(prompt: str) -> str:
+    """Gemini API 호출. 429/503 시 지수 백오프로 최대 3회 재시도."""
     client = _client()
-    response = client.models.generate_content(
-        model=ai_model(),
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0.3,
-            max_output_tokens=1024,
-        ),
-    )
-    return response.text or ""
+    last_exc: Exception | None = None
+
+    for attempt, delay in enumerate((*_RETRY_DELAYS, None), start=1):
+        try:
+            response = client.models.generate_content(
+                model=ai_model(),
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.3,
+                    max_output_tokens=1024,
+                ),
+            )
+            return response.text or ""
+        except Exception as exc:
+            last_exc = exc
+            exc_str = str(exc)
+            is_retryable = any(code in exc_str for code in ("429", "503", "quota", "RESOURCE_EXHAUSTED"))
+            if is_retryable and delay is not None:
+                log.warning(f"Gemini API 일시 오류 (시도 {attempt}/4): {exc_str[:120]} — {delay}초 후 재시도")
+                time.sleep(delay)
+            else:
+                raise
+
+    raise RuntimeError(f"Gemini API 4회 모두 실패: {last_exc}")
 
 
 def _parse_response(raw: str) -> dict:

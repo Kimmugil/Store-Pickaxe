@@ -2,6 +2,7 @@
 구글 플레이 스토어 수집기
 google-play-scraper 라이브러리 사용
 """
+import logging
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -12,6 +13,8 @@ from google_play_scraper import reviews as gp_reviews
 from google_play_scraper import Sort
 
 from backend.config import collect_delay
+
+log = logging.getLogger(__name__)
 
 
 def search_apps(query: str, n: int = 10, country: str = "kr", lang: str = "ko") -> list[dict]:
@@ -73,9 +76,11 @@ def collect_reviews(
     collected = []
     continuation_token = None
     consecutive_known = 0
-    EARLY_STOP_THRESHOLD = 40  # 연속 기존 리뷰 40개 → 종료
+    EARLY_STOP_THRESHOLD = 40   # 연속 기존 리뷰 40개 → 종료
+    MAX_PAGES = 50              # 무한루프 방지: 최대 50페이지(200개씩 = 최대 1만개)
+    page_count = 0
 
-    while len(collected) < max_count:
+    while len(collected) < max_count and page_count < MAX_PAGES:
         try:
             result, continuation_token = gp_reviews(
                 package_name,
@@ -85,19 +90,20 @@ def collect_reviews(
                 count=200,
                 continuation_token=continuation_token,
             )
-        except Exception:
+        except Exception as exc:
+            log.warning(f"[google] 리뷰 수집 중단 (pkg={package_name}): {exc}")
             break
+
+        page_count += 1
 
         if not result:
             break
 
-        page_all_known = True
         for r in result:
             rid = r.get("reviewId", "")
             if rid in existing_ids:
                 consecutive_known += 1
             else:
-                page_all_known = False
                 consecutive_known = 0
                 collected.append(_normalize_review(r))
 
@@ -108,6 +114,9 @@ def collect_reviews(
             break
 
         time.sleep(collect_delay())
+
+    if page_count >= MAX_PAGES:
+        log.warning(f"[google] 최대 페이지({MAX_PAGES}페이지) 도달 — 루프 강제 종료 (pkg={package_name})")
 
     return collected
 

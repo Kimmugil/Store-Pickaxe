@@ -70,6 +70,12 @@ def get_current_rating(app_id: str, country: str = "kr") -> dict:
     return {"rating": None, "review_count": None, "version": None}
 
 
+import logging as _logging
+_log = _logging.getLogger(__name__)
+
+_MAX_RETRY_PER_PAGE = 2  # 페이지당 최대 재시도 횟수
+
+
 def collect_reviews(
     app_id: str,
     existing_ids: set[str],
@@ -85,34 +91,50 @@ def collect_reviews(
 
     for page in range(1, max_pages + 1):
         url = _REVIEWS_URL.format(country=country, page=page, app_id=app_id)
-        try:
-            resp = requests.get(url, headers=_HEADERS, timeout=15)
-            resp.raise_for_status()
-            feed = resp.json().get("feed", {})
-            entries = feed.get("entry", [])
+        entries = None
 
-            if not entries:
+        for attempt in range(_MAX_RETRY_PER_PAGE + 1):
+            try:
+                resp = requests.get(url, headers=_HEADERS, timeout=15)
+                resp.raise_for_status()
+                feed = resp.json().get("feed", {})
+                entries = feed.get("entry", [])
                 break
+            except Exception as exc:
+                if attempt < _MAX_RETRY_PER_PAGE:
+                    time.sleep(2 ** attempt)
+                else:
+                    _log.warning(f"[apple] 페이지 {page} 수집 실패 (app_id={app_id}): {exc}")
 
-            # 첫 entry는 앱 메타이므로 건너뜀
-            if page == 1 and entries and "im:name" in entries[0]:
-                entries = entries[1:]
-
-            page_new = 0
-            for entry in entries:
-                rid = _extract(entry, "id", "label", "")
-                if rid and rid not in existing_ids:
-                    review = _normalize_review(entry)
-                    if review:
-                        collected.append(review)
-                        page_new += 1
-
-            # 이 페이지에 새 리뷰가 하나도 없으면 조기 종료
-            if page_new == 0 and existing_ids:
-                break
-
-        except Exception:
+        if entries is None:
             break
+
+        if not entries:
+            break
+
+        # 첫 entry는 앱 메타이므로 건너뜀
+        if page == 1 and entries and "im:name" in entries[0]:
+            entries = entries[1:]
+
+        page_new = 0
+        for entry in entries:
+            rid = _extract(entry, "id", "label", "")
+            if rid and rid not in existing_ids:
+                review = _normalize_review(entry)
+                if review:
+                    collected.append(review)
+                    page_new += 1
+
+        # 이 페이지에 새 리뷰가 하나도 없으면 조기 종료
+        if page_new == 0 and existing_ids:
+            break
+
+        # 마지막 페이지까지 소진한 경우 경고
+        if page == max_pages:
+            _log.warning(
+                f"[apple] RSS 최대 페이지({max_pages}페이지, ~{max_pages * 50}개)를 모두 소진했습니다 "
+                f"(app_id={app_id}). 수집 빈도 증가를 검토하세요."
+            )
 
         time.sleep(collect_delay())
 

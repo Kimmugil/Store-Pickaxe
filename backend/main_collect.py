@@ -143,11 +143,14 @@ def process_app(app: dict) -> None:
     new_g, new_a = [], []
 
     if _should_collect_reviews(app, today):
+        any_collection_succeeded = False
+
         if google_pkg:
             try:
                 existing_ids = asheet.get_existing_review_ids(ss_id, "google")
                 new_g = gc.collect_reviews(google_pkg, existing_ids)
                 saved = asheet.save_google_reviews(ss_id, new_g)
+                any_collection_succeeded = True
                 log.info(f"[{app_key}] 구글 리뷰 +{saved}개")
             except Exception as e:
                 log.error(f"[{app_key}] 구글 리뷰 수집 실패: {e}")
@@ -159,11 +162,17 @@ def process_app(app: dict) -> None:
                 existing_ids = asheet.get_existing_review_ids(ss_id, "apple")
                 new_a = ac.collect_reviews(apple_id, existing_ids)
                 saved = asheet.save_apple_reviews(ss_id, new_a)
+                any_collection_succeeded = True
                 log.info(f"[{app_key}] 애플 리뷰 +{saved}개")
             except Exception as e:
                 log.error(f"[{app_key}] 애플 리뷰 수집 실패: {e}")
 
-        master.update_app(app_key, {"last_collected_at": today})
+        # 최소 하나의 플랫폼이 성공했을 때만 타임스탬프 갱신
+        # (모두 실패한 경우 재시도 기회 보존)
+        if any_collection_succeeded:
+            master.update_app(app_key, {"last_collected_at": today})
+        else:
+            log.warning(f"[{app_key}] 모든 플랫폼 수집 실패 — last_collected_at 갱신 생략")
 
         # 수집 빈도 재분류 (30일 리뷰 속도 기반)
         try:

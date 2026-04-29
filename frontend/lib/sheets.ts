@@ -123,7 +123,7 @@ export const getAppSnapshots = unstable_cache(
     }
   },
   ["app-snapshots"],
-  { revalidate: 300 }
+  { revalidate: 300, tags: ["app-snapshots"] }
 );
 
 export const getAppTimeline = unstable_cache(
@@ -136,7 +136,7 @@ export const getAppTimeline = unstable_cache(
     }
   },
   ["app-timeline"],
-  { revalidate: 300 }
+  { revalidate: 300, tags: ["app-timeline"] }
 );
 
 export const getAppAnalyses = unstable_cache(
@@ -149,7 +149,7 @@ export const getAppAnalyses = unstable_cache(
     }
   },
   ["app-analyses"],
-  { revalidate: 300 }
+  { revalidate: 300, tags: ["app-analyses"] }
 );
 
 export const getAppReviews = unstable_cache(
@@ -160,12 +160,30 @@ export const getAppReviews = unstable_cache(
   ): Promise<Review[]> => {
     try {
       const sheet = platform === "google" ? "GOOGLE_REVIEWS" : "APPLE_REVIEWS";
+      // Google: review_id,rating,content,app_version,reviewed_at,thumbs_up,collected_at (7열)
+      // Apple:  review_id,rating,title,content,app_version,reviewed_at,collected_at (7열)
       const rows = await readRange(spreadsheetId, `${sheet}!A:G`);
-      const records = rowsToRecords<Record<string, string>>(rows).map((r) => ({
-        ...r,
-        rating: parseInt(r.rating) || 0,
-        thumbs_up: parseInt(r.thumbs_up) || 0,
-      })) as unknown as Review[];
+      const records = rowsToRecords<Record<string, string>>(rows).map((r) => {
+        if (platform === "google") {
+          return {
+            review_id: r.review_id ?? "",
+            rating: parseInt(r.rating) || 0,
+            content: r.content ?? "",
+            app_version: r.app_version ?? "",
+            reviewed_at: r.reviewed_at ?? "",
+            thumbs_up: parseInt(r.thumbs_up) || 0,
+          } as Review;
+        } else {
+          return {
+            review_id: r.review_id ?? "",
+            rating: parseInt(r.rating) || 0,
+            title: r.title ?? "",
+            content: r.content ?? "",
+            app_version: r.app_version ?? "",
+            reviewed_at: r.reviewed_at ?? "",
+          } as Review;
+        }
+      });
       return records
         .sort((a, b) => (b.reviewed_at > a.reviewed_at ? 1 : -1))
         .slice(0, limit);
@@ -174,7 +192,7 @@ export const getAppReviews = unstable_cache(
     }
   },
   ["app-reviews"],
-  { revalidate: 600 }
+  { revalidate: 600, tags: ["app-reviews"] }
 );
 
 /**
