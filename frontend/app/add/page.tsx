@@ -90,7 +90,7 @@ export default function AddPage() {
         <h2 className="text-xl font-bold">{texts["add.success.title"] || "등록 완료!"}</h2>
         <p className="text-sm text-gray-500">{texts["add.success.desc"] || "게임이 등록되었습니다."}</p>
         <p className="text-xs text-gray-400 bg-yellow-50 rounded-xl px-4 py-3">
-          {texts["add.pending_ai.notice"] || "AI 분석은 관리자 승인 후 자동으로 진행됩니다."}
+          {texts["add.pending_ai.notice"] || "리뷰 수집이 즉시 시작됩니다. AI 분석은 관리자 승인 후 자동으로 진행됩니다."}
         </p>
         <button onClick={() => router.push(`/${registeredKey}`)} className="btn-primary mt-4">
           {texts["common.view"] || "상세 보기"} <ArrowRight size={14} />
