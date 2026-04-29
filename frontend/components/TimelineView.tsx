@@ -11,14 +11,14 @@ interface Props {
   analyses: Analysis[];
 }
 
-const EVENT_ICONS = {
+const EVENT_ICONS: Record<string, ({ size }: { size?: number }) => JSX.Element> = {
   version_release: Tag,
   sentiment_shift: AlertTriangle,
   review_surge: Zap,
   admin_patch: Wrench,
 };
 
-const EVENT_COLORS = {
+const EVENT_COLORS: Record<string, string> = {
   version_release: "bg-indigo-50 text-indigo-600 border-indigo-100",
   sentiment_shift: "bg-red-50 text-red-600 border-red-100",
   review_surge: "bg-yellow-50 text-yellow-600 border-yellow-100",
