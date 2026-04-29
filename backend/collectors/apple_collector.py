@@ -112,21 +112,27 @@ def collect_reviews(
         if not entries:
             break
 
+        # Apple RSS가 단일 리뷰일 때 dict로 반환하는 경우 대응
+        if isinstance(entries, dict):
+            entries = [entries]
+
         # 첫 entry는 앱 메타이므로 건너뜀
         if page == 1 and entries and "im:name" in entries[0]:
             entries = entries[1:]
 
         page_new = 0
         for entry in entries:
-            rid = _extract(entry, "id", "label", "")
+            rid = _extract_id(entry)
             if rid and rid not in existing_ids:
-                review = _normalize_review(entry)
+                review = _normalize_review(entry, rid)
                 if review:
                     collected.append(review)
+                    existing_ids.add(rid)  # 같은 수집 배치 내 중복 방지
                     page_new += 1
 
         # 이 페이지에 새 리뷰가 하나도 없으면 조기 종료
-        if page_new == 0 and existing_ids:
+        # existing_ids가 비어도 page_new==0이면 읽을 리뷰가 없는 것
+        if page_new == 0:
             break
 
         # 마지막 페이지까지 소진한 경우 경고
@@ -139,6 +145,16 @@ def collect_reviews(
         time.sleep(collect_delay())
 
     return collected
+
+
+def _extract_id(entry: dict) -> str:
+    """Apple RSS entry에서 review ID를 추출. 포맷이 다양해 robust하게 처리."""
+    id_node = entry.get("id", {})
+    if isinstance(id_node, dict):
+        val = id_node.get("label", "")
+    else:
+        val = str(id_node) if id_node else ""
+    return val.strip()
 
 
 def _extract(entry: dict, *keys, default="") -> str:
@@ -162,8 +178,9 @@ def _normalize_search_result(r: dict) -> dict:
     }
 
 
-def _normalize_review(entry: dict) -> Optional[dict]:
-    rid = _extract(entry, "id", "label")
+def _normalize_review(entry: dict, rid: str = "") -> Optional[dict]:
+    if not rid:
+        rid = _extract_id(entry)
     if not rid:
         return None
 
