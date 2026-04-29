@@ -262,13 +262,16 @@ def process_app(app: dict) -> None:
 
 
 def main():
-    apps = master.get_active_apps()
-
     if TARGET_APP_KEY:
-        apps = [a for a in apps if a["app_key"] == TARGET_APP_KEY]
+        # 특정 앱 지정 시 pending 포함 — 등록 직후 즉시 수집 대응
+        all_apps = master.get_all_apps()
+        apps = [a for a in all_apps if a["app_key"] == TARGET_APP_KEY
+                and a.get("status") in ("active", "pending")]
         if not apps:
             log.error(f"앱을 찾을 수 없습니다: {TARGET_APP_KEY}")
             sys.exit(1)
+    else:
+        apps = master.get_active_apps()
 
     log.info(f"총 {len(apps)}개 앱 처리 시작")
 
