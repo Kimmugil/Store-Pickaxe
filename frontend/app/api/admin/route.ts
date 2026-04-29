@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { getAllApps, getAdminPassword, updateAppField } from "@/lib/sheets";
+import { getAllApps, getAdminPassword, updateAppField, deleteAppFromMaster } from "@/lib/sheets";
 
 async function verifyPassword(req: NextRequest, body: Record<string, string>): Promise<boolean> {
   const submitted = body.password || req.headers.get("x-admin-password") || "";
@@ -61,6 +61,12 @@ export async function POST(req: NextRequest) {
 
       case "mark_patch": {
         await updateAppField(app_key, "pending_ai_trigger", "manual");
+        revalidateTag("all-apps");
+        return NextResponse.json({ ok: true });
+      }
+
+      case "delete_app": {
+        await deleteAppFromMaster(app_key);
         revalidateTag("all-apps");
         return NextResponse.json({ ok: true });
       }

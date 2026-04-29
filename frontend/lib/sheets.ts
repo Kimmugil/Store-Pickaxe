@@ -250,6 +250,38 @@ export async function registerAppToMaster(app: {
   ]);
 }
 
+export async function deleteAppFromMaster(appKey: string): Promise<void> {
+  // 행 인덱스 확인 (0-based, 헤더 포함)
+  const rows = await readRange(MASTER_ID(), "MASTER!A:A");
+  const rowIdx = rows.findIndex((r) => r[0] === appKey);
+  if (rowIdx < 0) throw new Error(`앱 '${appKey}'를 찾을 수 없습니다.`);
+
+  // MASTER 시트의 sheetId 조회 (deleteDimension 요청에 필요)
+  const auth = getAuth();
+  const sheetsApi = google.sheets({ version: "v4", auth });
+  const spreadsheet = await sheetsApi.spreadsheets.get({ spreadsheetId: MASTER_ID() });
+  const masterSheet = spreadsheet.data.sheets?.find((s) => s.properties?.title === "MASTER");
+  const sheetId = masterSheet?.properties?.sheetId ?? 0;
+
+  await sheetsApi.spreadsheets.batchUpdate({
+    spreadsheetId: MASTER_ID(),
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: rowIdx,       // 0-based: 헤더가 0이면 첫 데이터가 1
+              endIndex: rowIdx + 1,
+            },
+          },
+        },
+      ],
+    },
+  });
+}
+
 export async function updateAppField(
   appKey: string,
   field: string,
