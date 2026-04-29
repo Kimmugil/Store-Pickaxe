@@ -19,6 +19,7 @@ from backend.sheets import app_sheet as asheet
 from backend.collectors import google_collector as gc
 from backend.collectors import apple_collector as ac
 from backend.analyzers import shift_detector as sd
+from backend.analyzers import review_aggregator as ra
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,17 +67,48 @@ def _classify_velocity(google_reviews: list[dict], apple_reviews: list[dict]) ->
     return sd.classify_velocity(weekly_avg)
 
 
+def _should_trigger_quarterly(app: dict, monthly_rates: list[dict]) -> bool:
+    """이전 분기 분석 트리거 여부 확인."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    prev_year, prev_q = ra.prev_quarter(now.year, now.month)
+    label = ra.quarter_label(prev_year, prev_q)
+
+    if app.get("last_analyzed_at") == label:
+        return False  # 이미 해당 분기 분석 완료
+
+    quarter_months = {f"{prev_year}-{m:02d}" for m in _quarter_month_nums(prev_q)}
+    quarter_rates = [mr for mr in monthly_rates if mr["year_month"] in quarter_months]
+    total_reviews = sum(
+        mr.get("review_count_google", 0) + mr.get("review_count_apple", 0)
+        for mr in quarter_rates
+    )
+    return total_reviews >= cfg.min_reviews_for_ai()
+
+
+def _quarter_month_nums(quarter: int) -> list[int]:
+    return [quarter * 3 - 2, quarter * 3 - 1, quarter * 3]
+
+
 def _check_ai_trigger(
     app: dict,
     new_g: list[dict],
     new_a: list[dict],
     new_events: list[dict],
+    monthly_rates: list[dict],
+    is_first_collection: bool,
 ) -> str | None:
     """AI 분석 트리거 조건 확인. 트리거 종류 반환 (없으면 None)"""
     if app.get("pending_ai_trigger"):
         return None  # 이미 대기 중
 
     total_new = len(new_g) + len(new_a)
+
+    # 첫 수집 시 리뷰가 충분하면 초기 분석
+    if is_first_collection:
+        total_all = total_new
+        if total_all >= cfg.min_reviews_for_ai():
+            return "initial"
 
     # 버전 출시 이벤트가 있고 새 리뷰가 충분히 쌓인 경우
     for event in new_events:
@@ -92,6 +124,10 @@ def _check_ai_trigger(
     for event in new_events:
         if event["event_type"] == "review_surge":
             return "surge"
+
+    # 분기별 정기 분석
+    if _should_trigger_quarterly(app, monthly_rates):
+        return "quarterly"
 
     return None
 
@@ -141,6 +177,7 @@ def process_app(app: dict) -> None:
 
     # ── 2. 리뷰 수집 (빈도 조건 충족 시) ──────────────────────
     new_g, new_a = [], []
+    is_first_collection = not app.get("last_collected_at")  # 수집 전에 확인
 
     if _should_collect_reviews(app, today):
         any_collection_succeeded = False
@@ -174,18 +211,25 @@ def process_app(app: dict) -> None:
         else:
             log.warning(f"[{app_key}] 모든 플랫폼 수집 실패 — last_collected_at 갱신 생략")
 
-        # 수집 빈도 재분류 (30일 리뷰 속도 기반)
-        try:
-            all_g = asheet.get_google_reviews(ss_id)
-            all_a = asheet.get_apple_reviews(ss_id)
-            new_freq = _classify_velocity(all_g, all_a)
-            if new_freq != app.get("collect_frequency"):
-                master.update_app(app_key, {"collect_frequency": new_freq})
-                log.info(f"[{app_key}] 수집 빈도 → {new_freq}")
-        except Exception:
-            pass
+    # ── 3. 월별 긍정률 집계 → TIMELINE monthly_summary ─────────
+    monthly_rates: list[dict] = []
+    try:
+        all_g = asheet.get_google_reviews(ss_id)
+        all_a = asheet.get_apple_reviews(ss_id)
+        monthly_rates = ra.calc_monthly_positive_rates(all_g, all_a)
+        saved_ms = asheet.upsert_monthly_summaries(ss_id, monthly_rates)
+        log.info(f"[{app_key}] 월별 긍정률 {saved_ms}개월 갱신")
 
-    # ── 3. 이벤트 감지 ─────────────────────────────────────────
+        # 수집 빈도 재분류 (30일 리뷰 속도 기반)
+        new_freq = _classify_velocity(all_g, all_a)
+        if new_freq != app.get("collect_frequency"):
+            master.update_app(app_key, {"collect_frequency": new_freq})
+            log.info(f"[{app_key}] 수집 빈도 → {new_freq}")
+    except Exception as e:
+        log.error(f"[{app_key}] 월별 긍정률 집계 실패: {e}")
+        all_g, all_a = [], []
+
+    # ── 4. 이벤트 감지 ─────────────────────────────────────────
     try:
         snapshots = asheet.get_snapshots(ss_id)
         existing_dates = asheet.get_existing_event_dates(ss_id)
@@ -195,6 +239,9 @@ def process_app(app: dict) -> None:
         new_events += sd.detect_version_change(snapshots, existing_dates)
         new_events += sd.detect_rating_shifts(snapshots, existing_dates, velocity)
         new_events += sd.detect_review_surge(snapshots, existing_dates)
+        # 리뷰 기반 긍정률 급변 감지 (snapshot 기반과 병행)
+        if all_g or all_a:
+            new_events += sd.detect_shifts_from_reviews(all_g, all_a, existing_dates, velocity)
 
         for event in new_events:
             asheet.save_timeline_event(ss_id, event)
@@ -204,9 +251,9 @@ def process_app(app: dict) -> None:
         log.error(f"[{app_key}] 이벤트 감지 실패: {e}")
         new_events = []
 
-    # ── 4. AI 트리거 확인 ──────────────────────────────────────
+    # ── 5. AI 트리거 확인 ──────────────────────────────────────
     if app.get("ai_approved", "").upper() == "TRUE":
-        trigger = _check_ai_trigger(app, new_g, new_a, new_events)
+        trigger = _check_ai_trigger(app, new_g, new_a, new_events, monthly_rates, is_first_collection)
         if trigger:
             master.set_pending_trigger(app_key, trigger)
             log.info(f"[{app_key}] AI 분석 대기 → {trigger}")

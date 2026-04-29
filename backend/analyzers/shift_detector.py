@@ -176,6 +176,80 @@ def detect_version_change(
     return events
 
 
+def detect_shifts_from_reviews(
+    google_reviews: list[dict],
+    apple_reviews: list[dict],
+    existing_event_dates: set[str],
+    velocity_level: str = "medium",
+) -> list[dict]:
+    """
+    리뷰의 일별 긍정률에서 급변 이벤트를 감지한다.
+    7일 롤링 긍정률 vs 30일 기준선 비교 (단위: %).
+    """
+    daily = _aggregate_daily(google_reviews, apple_reviews)
+    if len(daily) < 10:
+        return []
+
+    threshold = shift_threshold(velocity_level) * 20  # 0.5점 → 10pp, 1.0점 → 20pp
+    sorted_dates = sorted(daily)
+    events = []
+
+    for i in range(7, len(sorted_dates)):
+        d = sorted_dates[i]
+        if d in existing_event_dates:
+            continue
+
+        window_7 = sorted_dates[max(0, i - 6): i + 1]
+        window_30 = sorted_dates[max(0, i - 29): i + 1]
+
+        pos_7 = sum(daily[dd]["pos"] for dd in window_7)
+        tot_7 = sum(daily[dd]["total"] for dd in window_7)
+        pos_30 = sum(daily[dd]["pos"] for dd in window_30)
+        tot_30 = sum(daily[dd]["total"] for dd in window_30)
+
+        if tot_7 < 5 or tot_30 < 10:
+            continue
+
+        rate_7 = pos_7 / tot_7 * 100
+        rate_30 = pos_30 / tot_30 * 100
+        delta = rate_7 - rate_30
+
+        if abs(delta) >= threshold:
+            events.append({
+                "event_date": d,
+                "event_type": "sentiment_shift",
+                "version": "",
+                "review_count": tot_7,
+                "summary": f"긍정률 {'상승' if delta > 0 else '하락'} ({delta:+.1f}pp, 최근7일 {rate_7:.0f}%)",
+                "analysis_id": "",
+            })
+            existing_event_dates.add(d)
+
+    return _deduplicate(events)
+
+
+def _aggregate_daily(
+    google_reviews: list[dict],
+    apple_reviews: list[dict],
+) -> dict[str, dict]:
+    """일별 {pos, total} 집계."""
+    daily: dict[str, dict] = defaultdict(lambda: {"pos": 0, "total": 0})
+    for r in google_reviews + apple_reviews:
+        d = (r.get("reviewed_at") or "")[:10]
+        if len(d) == 10:
+            daily[d]["total"] += 1
+            if _is_positive_review(r.get("rating")):
+                daily[d]["pos"] += 1
+    return dict(daily)
+
+
+def _is_positive_review(rating) -> bool:
+    try:
+        return int(rating) >= 4
+    except (TypeError, ValueError):
+        return False
+
+
 def classify_velocity(avg_weekly_reviews: float) -> str:
     """weekly review count → high | medium | low"""
     if avg_weekly_reviews >= 50:

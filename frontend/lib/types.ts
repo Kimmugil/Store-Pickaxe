@@ -35,7 +35,7 @@ export interface Snapshot {
 export interface TimelineEvent {
   event_id: string;
   event_date: string;
-  event_type: "version_release" | "sentiment_shift" | "review_surge" | "admin_patch";
+  event_type: "version_release" | "sentiment_shift" | "review_surge" | "admin_patch" | "monthly_summary";
   version: string;
   google_rating_before: number | null;
   google_rating_after: number | null;
@@ -44,6 +44,8 @@ export interface TimelineEvent {
   review_count: number | null;
   summary: string;
   analysis_id: string;
+  google_positive_rate: number | null;
+  apple_positive_rate: number | null;
 }
 
 export interface Analysis {

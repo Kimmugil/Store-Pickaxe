@@ -3,65 +3,77 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from "recharts";
-import type { Snapshot, TimelineEvent, Texts } from "@/lib/types";
+import type { TimelineEvent } from "@/lib/types";
 import { useTexts } from "./TextsProvider";
 
 interface Props {
-  snapshots: Snapshot[];
   events: TimelineEvent[];
 }
 
-export default function RatingChart({ snapshots, events }: Props) {
+export default function RatingChart({ events }: Props) {
   const texts = useTexts();
 
-  const data = snapshots
-    .filter((s) => s.date)
-    .sort((a, b) => (a.date > b.date ? 1 : -1))
-    .map((s) => ({
-      date: s.date.slice(0, 10),
-      google: s.google_rating ? Number(s.google_rating.toFixed(2)) : null,
-      apple: s.apple_rating ? Number(s.apple_rating.toFixed(2)) : null,
+  const data = events
+    .filter((e) => e.event_type === "monthly_summary" && e.event_date)
+    .sort((a, b) => (a.event_date > b.event_date ? 1 : -1))
+    .map((e) => ({
+      month: e.event_date.slice(0, 7),           // "2025-04"
+      label: e.event_date.slice(2, 7),            // "25-04"
+      google: e.google_positive_rate ?? null,
+      apple: e.apple_positive_rate ?? null,
     }));
 
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-48 text-sm text-gray-400">
-        {texts["detail.rating.no_data"] || "수집된 평점 데이터가 없습니다."}
+        {texts["detail.rating.no_data"] || "수집된 데이터가 없습니다. 첫 수집 후 확인해 주세요."}
       </div>
     );
   }
 
-  const versionEvents = events
-    .filter((e) => e.event_type === "version_release" && e.event_date)
-    .map((e) => e.event_date.slice(0, 10));
-
-  const shiftEvents = events
-    .filter((e) => e.event_type === "sentiment_shift" && e.event_date)
-    .map((e) => e.event_date.slice(0, 10));
+  const versionMonths = new Set(
+    events
+      .filter((e) => e.event_type === "version_release" && e.event_date)
+      .map((e) => e.event_date.slice(0, 7))
+  );
+  const shiftMonths = new Set(
+    events
+      .filter((e) => e.event_type === "sentiment_shift" && e.event_date)
+      .map((e) => e.event_date.slice(0, 7))
+  );
 
   return (
     <ResponsiveContainer width="100%" height={280}>
       <LineChart data={data} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
         <XAxis
-          dataKey="date"
+          dataKey="label"
           tick={{ fontSize: 11 }}
-          tickFormatter={(v) => v.slice(5)}
           interval="preserveStartEnd"
         />
-        <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 11 }} />
+        <YAxis
+          domain={[0, 100]}
+          ticks={[0, 25, 50, 75, 100]}
+          tick={{ fontSize: 11 }}
+          tickFormatter={(v) => `${v}%`}
+        />
         <Tooltip
           contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
-          formatter={(val: number) => val?.toFixed(2)}
+          formatter={(val: number) => `${val?.toFixed(1)}%`}
+          labelFormatter={(label) => `${label} 긍정률`}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
 
-        {versionEvents.map((d) => (
-          <ReferenceLine key={`v-${d}`} x={d} stroke="#6366f1" strokeDasharray="4 2" strokeWidth={1.5} />
-        ))}
-        {shiftEvents.map((d) => (
-          <ReferenceLine key={`s-${d}`} x={d} stroke="#ef4444" strokeDasharray="4 2" strokeWidth={1.5} />
-        ))}
+        {data
+          .filter((d) => versionMonths.has(d.month))
+          .map((d) => (
+            <ReferenceLine key={`v-${d.label}`} x={d.label} stroke="#6366f1" strokeDasharray="4 2" strokeWidth={1.5} />
+          ))}
+        {data
+          .filter((d) => shiftMonths.has(d.month))
+          .map((d) => (
+            <ReferenceLine key={`s-${d.label}`} x={d.label} stroke="#ef4444" strokeDasharray="4 2" strokeWidth={1.5} />
+          ))}
 
         <Line
           type="monotone"
@@ -69,7 +81,7 @@ export default function RatingChart({ snapshots, events }: Props) {
           name={texts["common.platform.google"] || "Google Play"}
           stroke="#4285F4"
           strokeWidth={2}
-          dot={false}
+          dot={{ r: 3 }}
           connectNulls
         />
         <Line
@@ -78,7 +90,7 @@ export default function RatingChart({ snapshots, events }: Props) {
           name={texts["common.platform.apple"] || "App Store"}
           stroke="#555555"
           strokeWidth={2}
-          dot={false}
+          dot={{ r: 3 }}
           connectNulls
         />
       </LineChart>

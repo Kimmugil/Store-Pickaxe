@@ -21,6 +21,7 @@ from backend.sheets import master_sheet as master
 from backend.sheets import app_sheet as asheet
 from backend.analyzers import sampler
 from backend.analyzers import gemini_analyzer as ai
+from backend.analyzers import review_aggregator as ra
 
 logging.basicConfig(
     level=logging.INFO,
@@ -87,6 +88,20 @@ def _filter_for_trigger(
         a = [r for r in apple_reviews if r.get("reviewed_at", "") >= cutoff]
         return g, a, "recent"
 
+    if trigger in ("quarterly", "initial"):
+        now = datetime.now(timezone.utc)
+        prev_year, prev_q = ra.prev_quarter(now.year, now.month)
+        label = ra.quarter_label(prev_year, prev_q)
+        g = ra.reviews_in_quarter(google_reviews, prev_year, prev_q)
+        a = ra.reviews_in_quarter(apple_reviews, prev_year, prev_q)
+        if not g and not a:
+            # 분기 리뷰 없으면 최근 90일 fallback
+            cutoff = (now - timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            g = [r for r in google_reviews if r.get("reviewed_at", "") >= cutoff]
+            a = [r for r in apple_reviews if r.get("reviewed_at", "") >= cutoff]
+            label = now.strftime("%Y-%m-%d")
+        return g, a, label
+
     # manual / 기타: 전체 최신 리뷰
     cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
     g = [r for r in google_reviews if r.get("reviewed_at", "") >= cutoff]
@@ -134,6 +149,7 @@ def process_app(app: dict) -> None:
                 asheet.link_analysis_to_event(ss_id, e.get("event_id", ""), analysis_id)
                 break
 
+        # quarterly/initial 트리거는 quarter_label("2025-Q1") 저장 → 중복 분기 방지
         master.update_app(app_key, {"last_analyzed_at": period_label})
         master.clear_pending_trigger(app_key)
         log.info(f"[{app_key}] AI 분석 완료 → {analysis_id}")

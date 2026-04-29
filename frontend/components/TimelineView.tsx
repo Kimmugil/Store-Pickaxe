@@ -29,7 +29,9 @@ export default function TimelineView({ events, analyses }: Props) {
   const texts = useTexts();
   const [expandedAnalysis, setExpandedAnalysis] = useState<string | null>(null);
 
-  const sorted = [...events].sort((a, b) => (b.event_date > a.event_date ? 1 : -1));
+  const sorted = [...events]
+    .filter((e) => e.event_type !== "monthly_summary")
+    .sort((a, b) => (b.event_date > a.event_date ? 1 : -1));
   const analysisMap = Object.fromEntries(analyses.map((a) => [a.analysis_id, a]));
 
   if (sorted.length === 0) {

@@ -36,6 +36,7 @@ TIMELINE_HEADERS = [
     "google_rating_before", "google_rating_after",
     "apple_rating_before", "apple_rating_after",
     "review_count", "summary", "analysis_id",
+    "google_positive_rate", "apple_positive_rate",
 ]
 ANALYSIS_HEADERS = [
     "analysis_id", "created_at", "trigger_type", "period_label",
@@ -66,6 +67,17 @@ def _ensure(ss: gspread.Spreadsheet, title: str, headers: list[str]) -> gspread.
         ws = ss.add_worksheet(title, rows=50000, cols=max(len(headers), 10))
         ws.append_row(headers)
         return ws
+
+
+def _ensure_timeline(ss: gspread.Spreadsheet) -> gspread.Worksheet:
+    """TIMELINE 워크시트를 가져오고, 신규 컬럼이 있으면 헤더에 추가한다 (하위 호환)."""
+    ws = _ensure(ss, "TIMELINE", TIMELINE_HEADERS)
+    existing = ws.row_values(1)
+    for h in TIMELINE_HEADERS:
+        if h not in existing:
+            ws.update_cell(1, len(existing) + 1, h)
+            existing.append(h)
+    return ws
 
 
 # ─── 스프레드시트 초기화 ─────────────────────────────────────────
@@ -208,28 +220,95 @@ def get_apple_reviews(spreadsheet_id: str) -> list[dict]:
 
 def save_timeline_event(spreadsheet_id: str, event: dict) -> str:
     ss = _open(spreadsheet_id)
-    ws = _ensure(ss, "TIMELINE", TIMELINE_HEADERS)
+    ws = _ensure_timeline(ss)
 
     event_id = event.get("event_id") or f"evt_{uuid.uuid4().hex[:8]}"
-    ws.append_row([
-        event_id,
-        event.get("event_date", ""),
-        event.get("event_type", ""),
-        event.get("version", ""),
-        event.get("google_rating_before", ""),
-        event.get("google_rating_after", ""),
-        event.get("apple_rating_before", ""),
-        event.get("apple_rating_after", ""),
-        event.get("review_count", ""),
-        event.get("summary", ""),
-        event.get("analysis_id", ""),
-    ], value_input_option="USER_ENTERED")
+    headers = ws.row_values(1)
+    row_event = dict(event)
+    row_event["event_id"] = event_id
+    row = [str(row_event.get(h, "")) for h in headers]
+    ws.append_row(row, value_input_option="USER_ENTERED")
     return event_id
+
+
+def upsert_monthly_summaries(spreadsheet_id: str, monthly_rates: list[dict]) -> int:
+    """
+    월별 긍정률을 TIMELINE의 monthly_summary 이벤트로 저장 (upsert).
+    Returns: 저장/갱신된 행 수
+    """
+    if not monthly_rates:
+        return 0
+
+    ss = _open(spreadsheet_id)
+    ws = _ensure_timeline(ss)
+    headers = ws.row_values(1)
+
+    all_rows = ws.get_all_values()
+    col_event_id = headers.index("event_id") if "event_id" in headers else 0
+    col_event_type = headers.index("event_type") if "event_type" in headers else 2
+
+    # 기존 monthly_summary 행의 {year_month: row_index(1-based)} 맵
+    existing: dict[str, int] = {}
+    for i, row in enumerate(all_rows[1:], start=2):
+        if len(row) > col_event_type and row[col_event_type] == "monthly_summary":
+            # event_id 형식: ms_YYYYMM
+            eid = row[col_event_id] if len(row) > col_event_id else ""
+            if eid.startswith("ms_") and len(eid) == 9:
+                ym = f"{eid[3:7]}-{eid[7:9]}"
+                existing[ym] = i
+
+    rows_to_append = []
+    saved = 0
+
+    for mr in monthly_rates:
+        ym = mr["year_month"]
+        g_rate = mr.get("google_positive_rate")
+        a_rate = mr.get("apple_positive_rate")
+        g_cnt = mr.get("review_count_google", 0)
+        a_cnt = mr.get("review_count_apple", 0)
+
+        summary_parts = []
+        if g_rate is not None:
+            summary_parts.append(f"Google {g_rate:.0f}%")
+        if a_rate is not None:
+            summary_parts.append(f"Apple {a_rate:.0f}%")
+        summary = " / ".join(summary_parts)
+
+        event_data = {
+            "event_id": f"ms_{ym.replace('-', '')}",
+            "event_date": f"{ym}-01",
+            "event_type": "monthly_summary",
+            "version": "",
+            "google_rating_before": "",
+            "google_rating_after": "",
+            "apple_rating_before": "",
+            "apple_rating_after": "",
+            "review_count": g_cnt + a_cnt,
+            "summary": summary,
+            "analysis_id": "",
+            "google_positive_rate": "" if g_rate is None else g_rate,
+            "apple_positive_rate": "" if a_rate is None else a_rate,
+        }
+        row = [str(event_data.get(h, "")) for h in headers]
+
+        if ym in existing:
+            row_idx = existing[ym]
+            col_end = chr(ord("A") + len(headers) - 1)
+            ws.update(f"A{row_idx}:{col_end}{row_idx}", [row], value_input_option="USER_ENTERED")
+        else:
+            rows_to_append.append(row)
+
+        saved += 1
+
+    if rows_to_append:
+        ws.append_rows(rows_to_append, value_input_option="USER_ENTERED")
+
+    return saved
 
 
 def get_timeline(spreadsheet_id: str) -> list[dict]:
     ss = _open(spreadsheet_id)
-    ws = _ensure(ss, "TIMELINE", TIMELINE_HEADERS)
+    ws = _ensure_timeline(ss)
     return ws.get_all_records()
 
 

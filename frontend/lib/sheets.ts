@@ -129,7 +129,7 @@ export const getAppSnapshots = unstable_cache(
 export const getAppTimeline = unstable_cache(
   async (spreadsheetId: string): Promise<TimelineEvent[]> => {
     try {
-      const rows = await readRange(spreadsheetId, "TIMELINE!A:K");
+      const rows = await readRange(spreadsheetId, "TIMELINE!A:M");
       return rowsToRecords<Record<string, string>>(rows).map(normalizeEvent);
     } catch {
       return [];
@@ -329,6 +329,8 @@ function normalizeEvent(r: Record<string, string>): TimelineEvent {
     apple_rating_before: parseFloat(r.apple_rating_before) || null,
     apple_rating_after: parseFloat(r.apple_rating_after) || null,
     review_count: parseInt(r.review_count) || null,
+    google_positive_rate: r.google_positive_rate !== "" ? parseFloat(r.google_positive_rate) || null : null,
+    apple_positive_rate: r.apple_positive_rate !== "" ? parseFloat(r.apple_positive_rate) || null : null,
   } as TimelineEvent;
 }
 

@@ -113,7 +113,7 @@ export default function AppDetailPage({ params }: { params: Promise<{ app_key: s
             <h2 className="text-sm font-semibold text-gray-500 mb-4">
               {texts["detail.rating.title"] || "평점 추이"}
             </h2>
-            <RatingChart snapshots={snapshots} events={timeline} />
+            <RatingChart events={timeline} />
             {/* 차트 범례 설명 */}
             <div className="flex gap-4 mt-3 text-xs text-gray-400">
               <span className="flex items-center gap-1">
@@ -125,6 +125,9 @@ export default function AppDetailPage({ params }: { params: Promise<{ app_key: s
                 {texts["detail.chart.shift_line"] || "평점 급변"}
               </span>
             </div>
+            <p className="mt-2 text-xs text-gray-300">
+              {texts["detail.chart.subtitle"] || "월별 긍정 리뷰 비율 (rating ≥ 4)"}
+            </p>
           </div>
           <div className="card p-5">
             <h2 className="text-sm font-semibold text-gray-500 mb-4">
