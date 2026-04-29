@@ -21,6 +21,9 @@ from collections import defaultdict
 from backend.config import shift_threshold, surge_multiplier
 
 
+_SHIFT_COOLDOWN_DAYS = 14  # 급변 이벤트 간 최소 간격 (일)
+
+
 def detect_rating_shifts(
     snapshots: list[dict],
     existing_event_dates: set[str],
@@ -39,10 +42,15 @@ def detect_rating_shifts(
     sorted_snaps = sorted(snapshots, key=lambda s: s.get("date", ""))
 
     events = []
+    last_event_date: str | None = None  # 쿨다운 추적
 
     for i in range(7, len(sorted_snaps)):
         date = sorted_snaps[i]["date"]
         if date in existing_event_dates:
+            continue
+
+        # 쿨다운: 마지막 이벤트로부터 14일 이내면 스킵
+        if last_event_date and _days_between(last_event_date, date) < _SHIFT_COOLDOWN_DAYS:
             continue
 
         window_7 = sorted_snaps[max(0, i - 6): i + 1]
@@ -73,6 +81,7 @@ def detect_rating_shifts(
                     "analysis_id": "",
                 })
                 existing_event_dates.add(date)
+                last_event_date = date
                 break  # 같은 날짜에 두 플랫폼 동시 등록 방지
 
     return _deduplicate(events)
@@ -193,10 +202,15 @@ def detect_shifts_from_reviews(
     threshold = shift_threshold(velocity_level) * 20  # 0.5점 → 10pp, 1.0점 → 20pp
     sorted_dates = sorted(daily)
     events = []
+    last_event_date: str | None = None  # 쿨다운 추적
 
     for i in range(7, len(sorted_dates)):
         d = sorted_dates[i]
         if d in existing_event_dates:
+            continue
+
+        # 쿨다운: 마지막 이벤트로부터 14일 이내면 스킵
+        if last_event_date and _days_between(last_event_date, d) < _SHIFT_COOLDOWN_DAYS:
             continue
 
         window_7 = sorted_dates[max(0, i - 6): i + 1]
@@ -207,7 +221,7 @@ def detect_shifts_from_reviews(
         pos_30 = sum(daily[dd]["pos"] for dd in window_30)
         tot_30 = sum(daily[dd]["total"] for dd in window_30)
 
-        if tot_7 < 5 or tot_30 < 10:
+        if tot_7 < 10 or tot_30 < 20:  # 최소 리뷰 수 상향 (5→10, 10→20)
             continue
 
         rate_7 = pos_7 / tot_7 * 100
@@ -224,6 +238,7 @@ def detect_shifts_from_reviews(
                 "analysis_id": "",
             })
             existing_event_dates.add(d)
+            last_event_date = d
 
     return _deduplicate(events)
 
@@ -257,6 +272,16 @@ def classify_velocity(avg_weekly_reviews: float) -> str:
     if avg_weekly_reviews >= 10:
         return "medium"
     return "low"
+
+
+def _days_between(date_a: str, date_b: str) -> int:
+    """YYYY-MM-DD 두 날짜 사이의 일수 (절댓값)."""
+    try:
+        a = datetime.strptime(date_a, "%Y-%m-%d")
+        b = datetime.strptime(date_b, "%Y-%m-%d")
+        return abs((b - a).days)
+    except Exception:
+        return 0
 
 
 def _to_float(val, default: float = 0.0) -> float:
