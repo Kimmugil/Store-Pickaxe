@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     if (!app_name) return NextResponse.json({ error: "app_name 필수" }, { status: 400 });
     if (!google_package && !apple_app_id)
       return NextResponse.json({ error: "구글 패키지 또는 애플 ID 중 하나는 필수" }, { status: 400 });
+    console.log("[register] 수신:", { app_name, google_package, apple_app_id });
 
     // 중복 확인
     const apps = await getAllApps();

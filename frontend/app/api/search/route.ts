@@ -18,15 +18,22 @@ async function searchGoogle(query: string): Promise<SearchResult[]> {
       country: "kr",
       lang: "ko",
     });
-    return results.map((r) => ({
-      platform: "google" as const,
-      package_name: String(r.appId ?? ""),
-      name: String(r.title ?? ""),
-      developer: String(r.developer ?? ""),
-      icon_url: String(r.icon ?? ""),
-      rating: Number(r.score) || 0,
-      review_count: Number(r.reviews) || 0,
-    }));
+    return results.map((r) => {
+      // appId가 없으면 url에서 추출 (예: .../details?id=com.example.app)
+      const appId = r.appId
+        || r.bundleId
+        || String(r.url ?? "").match(/[?&]id=([^&]+)/)?.[1]
+        || "";
+      return {
+        platform: "google" as const,
+        package_name: String(appId),
+        name: String(r.title ?? ""),
+        developer: String(r.developer ?? ""),
+        icon_url: String(r.icon ?? ""),
+        rating: Number(r.score) || 0,
+        review_count: Number(r.reviews) || 0,
+      };
+    });
   } catch {
     // 검색 실패 시 빈 배열 (차단 등)
     return [];
