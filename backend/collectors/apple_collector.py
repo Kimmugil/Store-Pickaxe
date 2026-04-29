@@ -120,19 +120,17 @@ def collect_reviews(
         if page == 1 and entries and "im:name" in entries[0]:
             entries = entries[1:]
 
-        # DEBUG: 첫 페이지 첫 entry 구조 출력
-        if page == 1 and entries:
-            import json
-            _log.warning(f"[apple][DEBUG] entry 샘플: {json.dumps(entries[0], ensure_ascii=False)[:500]}")
 
         page_new = 0
         for entry in entries:
             rid = _extract_id(entry)
-            if rid and rid not in existing_ids:
+            if not rid:
+                continue
+            if rid not in existing_ids:
                 review = _normalize_review(entry, rid)
                 if review:
                     collected.append(review)
-                    existing_ids.add(rid)  # 같은 수집 배치 내 중복 방지
+                    existing_ids.add(rid)
                     page_new += 1
 
         # 이 페이지에 새 리뷰가 하나도 없으면 조기 종료
@@ -198,7 +196,7 @@ def _normalize_review(entry: dict, rid: str = "") -> Optional[dict]:
         reviewed_at = updated
 
     try:
-        rating = int(_extract(entry, "im:rating", "label", "0"))
+        rating = int(_extract(entry, "im:rating", "label") or "0")
     except ValueError:
         rating = 0
 
