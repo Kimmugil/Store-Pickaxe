@@ -1,254 +1,302 @@
 "use client";
-import { useState, useEffect } from "react";
-import Image from "next/image";
-import { ArrowLeft, Clock, Sparkles } from "lucide-react";
+
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useTexts } from "@/components/TextsProvider";
-import RatingChart from "@/components/RatingChart";
-import TimelineView from "@/components/TimelineView";
-import AnalysisCard from "@/components/AnalysisCard";
-import ReviewList from "@/components/ReviewList";
-import type { AppDetail } from "@/lib/types";
-import { formatRating, ratingColor, formatDate } from "@/lib/utils";
+import { ArrowLeft, RefreshCw, ChevronRight } from "lucide-react";
+import type { AppMeta, CollectionLog, Analysis } from "@/lib/types";
 
-export default function AppDetailPage({ params }: { params: Promise<{ app_key: string }> }) {
-  const texts = useTexts();
-  const [appKey, setAppKey] = useState("");
-  const [data, setData] = useState<AppDetail | null>(null);
+interface AppDetailData {
+  meta: AppMeta;
+  logs: CollectionLog[];
+  analyses: Analysis[];
+}
+
+export default function AppDetailPage() {
+  const params = useParams();
+  const appKey = params.app_key as string;
+
+  const [data, setData] = useState<AppDetailData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"rating" | "analysis" | "reviews">("rating");
+  const [collecting, setCollecting] = useState(false);
+  const [collectMsg, setCollectMsg] = useState("");
 
-  useEffect(() => {
-    params.then((p) => setAppKey(p.app_key));
-  }, [params]);
-
-  useEffect(() => {
-    if (!appKey) return;
-    fetch(`/api/apps/${appKey}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [appKey]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <div className="text-center space-y-3">
-          <div
-            className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center text-2xl animate-bounce"
-            style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
-          >
-            ⛏
-          </div>
-          <p className="text-sm font-bold text-[#9CA3AF]">
-            {texts["common.loading"] || "로딩 중..."}
-          </p>
-        </div>
-      </div>
-    );
-  }
-  if (!data?.meta) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <div className="text-center space-y-3">
-          <p className="text-sm font-bold" style={{ color: "#FF6B6B" }}>
-            {texts["common.error"] || "앱을 찾을 수 없습니다."}
-          </p>
-          <Link href="/" className="neo-button-secondary text-sm">
-            <ArrowLeft size={14} /> 돌아가기
-          </Link>
-        </div>
-      </div>
-    );
+  async function loadData() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/apps/${appKey}`);
+      if (res.ok) setData(await res.json());
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const { meta, timeline, analyses, google_reviews, apple_reviews } = data;
-  const tabs = [
-    { id: "rating" as const, label: texts["detail.tab.rating"] || "평점 추이" },
-    { id: "analysis" as const, label: texts["detail.tab.analysis"] || "AI 분석" },
-    { id: "reviews" as const, label: texts["detail.tab.reviews"] || "리뷰" },
-  ];
+  useEffect(() => { loadData(); }, [appKey]);
+
+  async function handleCollect(mode: "onboarding" | "update") {
+    setCollecting(true);
+    setCollectMsg("");
+    try {
+      const res = await fetch("/api/collect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ app_key: appKey, mode }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setCollectMsg("✓ 수집 워크플로우를 시작했습니다. 완료까지 수 분 소요됩니다.");
+      } else {
+        setCollectMsg("✗ " + (json.error || "수집 실패"));
+      }
+    } catch {
+      setCollectMsg("✗ 네트워크 오류");
+    } finally {
+      setCollecting(false);
+    }
+  }
+
+  if (loading) return <SkeletonDetail />;
+  if (!data) return (
+    <div className="text-center py-20">
+      <p className="font-bold text-lg" style={{ color: "#1A1A1A" }}>앱을 찾을 수 없습니다</p>
+      <Link href="/" className="neo-button mt-4 inline-flex">← 목록으로</Link>
+    </div>
+  );
+
+  const { meta, logs, analyses } = data;
+  const sortedAnalyses = [...analyses].sort((a, b) => (b.created_at > a.created_at ? 1 : -1));
+  const hasReviews = (meta.google_review_count ?? 0) + (meta.apple_review_count ?? 0) > 0;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Back link */}
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1.5 text-sm font-bold text-[#9CA3AF] hover:text-[#1A1A1A] transition-colors"
-      >
+    <div className="space-y-6">
+      {/* 뒤로 가기 */}
+      <Link href="/" className="inline-flex items-center gap-2 text-sm font-bold" style={{ color: "#9CA3AF" }}>
         <ArrowLeft size={14} />
-        {texts["common.back"] || "목록으로"}
+        목록으로
       </Link>
 
-      {/* App header card */}
-      <div className="neo-card-static p-6">
+      {/* 앱 정보 카드 */}
+      <div className="card p-6">
         <div className="flex items-start gap-5">
           {meta.icon_url ? (
-            <Image
+            <img
               src={meta.icon_url}
               alt={meta.app_name}
               width={72}
               height={72}
               className="rounded-2xl flex-shrink-0"
               style={{ border: "2px solid #1A1A1A" }}
-              unoptimized
             />
           ) : (
             <div
-              className="w-[72px] h-[72px] rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl"
-              style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
+              className="flex-shrink-0 rounded-2xl flex items-center justify-center font-black text-2xl"
+              style={{ width: 72, height: 72, background: "#F0EFEC", border: "2px solid #1A1A1A" }}
             >
               🎮
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h1 className="font-black text-3xl text-[#1A1A1A] leading-tight">{meta.app_name}</h1>
-            <p className="text-sm text-[#9CA3AF] mt-1 font-medium">{meta.developer}</p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="font-black text-2xl" style={{ color: "#1A1A1A", letterSpacing: "-0.02em" }}>
+                {meta.app_name}
+              </h1>
+              {meta.pending_analysis && (
+                <span
+                  className="text-xs font-bold px-2.5 py-1 rounded-full"
+                  style={{ background: "#FEF9C3", border: "1.5px solid #FDE047", color: "#854D0E" }}
+                >
+                  분석 대기중
+                </span>
+              )}
+            </div>
+            <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>{meta.developer}</p>
             <div className="flex items-center gap-4 mt-3 flex-wrap">
-              {meta.google_package && (
-                <RatingPill
-                  label={texts["common.platform.google"] || "Google"}
-                  rating={meta.google_rating}
-                  color="#4285F4"
-                />
+              {meta.google_rating && (
+                <span className="text-sm font-bold" style={{ color: "#4285F4" }}>
+                  Google ★{Number(meta.google_rating).toFixed(1)}
+                </span>
               )}
-              {meta.apple_app_id && (
-                <RatingPill
-                  label={texts["common.platform.apple"] || "Apple"}
-                  rating={meta.apple_rating}
-                  color="#1A1A1A"
-                />
+              {meta.apple_rating && (
+                <span className="text-sm font-bold" style={{ color: "#1A1A1A" }}>
+                  Apple ★{Number(meta.apple_rating).toFixed(1)}
+                </span>
+              )}
+              {(meta.google_review_count ?? 0) > 0 && (
+                <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                  수집된 리뷰 Google {(meta.google_review_count ?? 0).toLocaleString()} · Apple {(meta.apple_review_count ?? 0).toLocaleString()}
+                </span>
               )}
             </div>
-          </div>
-          <div className="text-right flex-shrink-0 space-y-2">
-            <p className="text-xs text-[#9CA3AF] flex items-center gap-1 justify-end">
-              <Clock size={10} />
-              {texts["detail.last_snapshot"] || "최근 수집"} {formatDate(meta.last_snapshot_at)}
-            </p>
-            {meta.pending_ai_trigger && (
-              <span
-                className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full"
-                style={{ background: "#FFFDE7", color: "#B7960A", border: "1.5px solid #B7960A" }}
-              >
-                <Sparkles size={10} />
-                {texts["detail.analysis.pending"] || "AI 분석 대기 중"}
-              </span>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 flex-wrap">
-        {tabs.map((t) => (
+      {/* 수집 섹션 */}
+      <div className="card p-6 space-y-4">
+        <h2 className="font-black text-base" style={{ color: "#1A1A1A" }}>리뷰 수집</h2>
+        <div className="flex gap-3 flex-wrap">
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={tab === t.id ? "tab-active" : "tab-inactive"}
+            className="neo-button-primary"
+            onClick={() => handleCollect(hasReviews ? "update" : "onboarding")}
+            disabled={collecting}
           >
-            {t.label}
+            <RefreshCw size={14} className={collecting ? "animate-spin" : ""} />
+            {collecting ? "수집 중..." : hasReviews ? "신규 리뷰 수집" : "전체 수집 (첫 실행)"}
           </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      {tab === "rating" && (
-        <div className="space-y-5">
-          {/* Chart card */}
-          <div className="neo-card-static p-6">
-            <h2 className="font-black text-sm text-[#4A4A4A] mb-4 uppercase tracking-wider">
-              {texts["detail.rating.title"] || "평점 추이"}
-            </h2>
-            <RatingChart events={timeline} />
-            {/* Legend */}
-            <div className="flex gap-4 mt-4 text-xs text-[#9CA3AF]">
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="inline-block w-4 h-0.5 rounded"
-                  style={{ background: "#6366f1" }}
-                />
-                {texts["detail.chart.version_line"] || "버전 출시"}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="inline-block w-4 h-0.5 rounded"
-                  style={{ background: "#FF6B6B" }}
-                />
-                {texts["detail.chart.shift_line"] || "평점 급변"}
-              </span>
-            </div>
-            <p className="mt-2 text-xs text-[#9CA3AF] font-medium">
-              {texts["detail.chart.subtitle"] || "월별 긍정 리뷰 비율 (rating ≥ 4)"}
-            </p>
-          </div>
-
-          {/* Timeline card */}
-          <div className="neo-card-static p-6">
-            <h2 className="font-black text-sm text-[#4A4A4A] mb-4 uppercase tracking-wider">
-              {texts["detail.timeline.title"] || "이벤트 타임라인"}
-            </h2>
-            <TimelineView events={timeline} analyses={analyses} />
-          </div>
-        </div>
-      )}
-
-      {tab === "analysis" && (
-        <div className="space-y-4">
-          {analyses.length === 0 ? (
-            <div
-              className="flex flex-col items-center justify-center py-16 rounded-2xl gap-3"
-              style={{ border: "2px dashed #1A1A1A", background: "#FFFFFF" }}
+          {hasReviews && (
+            <button
+              className="neo-button"
+              onClick={() => handleCollect("onboarding")}
+              disabled={collecting}
             >
-              <Sparkles size={32} color="#9CA3AF" />
-              <p className="text-sm font-bold text-[#9CA3AF] text-center">
-                {meta.ai_approved
-                  ? texts["detail.analysis.no_data"] || "아직 분석 결과가 없습니다."
-                  : texts["detail.analysis.not_approved"] || "관리자 AI 분석 승인 대기 중입니다."}
-              </p>
-            </div>
-          ) : (
-            [...analyses]
-              .sort((a, b) => (b.created_at > a.created_at ? 1 : -1))
-              .map((analysis) => (
-                <div key={analysis.analysis_id} className="neo-card-static p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <span
-                      className="text-xs font-black px-3 py-1 rounded-full"
-                      style={{ background: "#EEF2FF", color: "#4338CA", border: "1.5px solid #4338CA" }}
-                    >
-                      {analysis.period_label}
-                    </span>
-                    <span className="text-xs text-[#9CA3AF] font-medium">
-                      {formatDate(analysis.created_at)}
-                    </span>
-                  </div>
-                  <AnalysisCard analysis={analysis} />
-                </div>
-              ))
+              전체 재수집
+            </button>
           )}
         </div>
-      )}
 
-      {tab === "reviews" && (
-        <div className="neo-card-static p-6">
-          <ReviewList googleReviews={google_reviews} appleReviews={apple_reviews} />
+        {collectMsg && (
+          <p
+            className="text-sm font-bold px-4 py-2 rounded-xl"
+            style={{
+              background: collectMsg.startsWith("✓") ? "#D1FAE5" : "#FEE2E2",
+              border: `1.5px solid ${collectMsg.startsWith("✓") ? "#6EE7B7" : "#FCA5A5"}`,
+              color: collectMsg.startsWith("✓") ? "#065F46" : "#991B1B",
+            }}
+          >
+            {collectMsg}
+          </p>
+        )}
+
+        {/* 수집 이력 */}
+        {logs.length > 0 && (
+          <div className="space-y-2 pt-2">
+            <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#9CA3AF" }}>
+              수집 이력
+            </p>
+            <div className="space-y-2">
+              {[...logs].reverse().slice(0, 5).map((log, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between px-4 py-2 rounded-xl text-sm"
+                  style={{ background: "#F0EFEC", border: "1.5px solid #E2E8F0" }}
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="text-xs font-black px-2 py-0.5 rounded-full"
+                      style={{
+                        background: log.mode === "onboarding" ? "#1A1A1A" : "#E2E8F0",
+                        color: log.mode === "onboarding" ? "#FFFFFF" : "#4A4A4A",
+                      }}
+                    >
+                      {log.mode === "onboarding" ? "전체" : "신규"}
+                    </span>
+                    <span style={{ color: "#4A4A4A" }}>
+                      Google +{log.google_added} · Apple +{log.apple_added}
+                    </span>
+                  </div>
+                  <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                    {formatDate(log.collected_at)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 분석 리포트 목록 */}
+      <div className="card p-6 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="font-black text-base" style={{ color: "#1A1A1A" }}>AI 분석 리포트</h2>
+          {meta.pending_analysis && (
+            <span className="text-xs" style={{ color: "#9CA3AF" }}>
+              관리자 승인 후 분석이 시작됩니다
+            </span>
+          )}
         </div>
-      )}
+
+        {sortedAnalyses.length === 0 ? (
+          <div
+            className="py-10 text-center rounded-xl"
+            style={{ background: "#F0EFEC", border: "1.5px solid #E2E8F0" }}
+          >
+            <p className="text-sm" style={{ color: "#9CA3AF" }}>
+              {meta.pending_analysis
+                ? "분석 승인 대기중입니다"
+                : hasReviews
+                ? "리뷰가 수집되었습니다 — 관리자가 분석을 승인하면 결과가 표시됩니다"
+                : "아직 수집된 리뷰가 없습니다"}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sortedAnalyses.map((analysis) => (
+              <Link
+                key={analysis.analysis_id}
+                href={`/report/${analysis.analysis_id}?app_key=${appKey}`}
+                className="block card-hover p-4"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span
+                        className="text-xs font-black px-2 py-0.5 rounded-full"
+                        style={{ background: "#F0EFEC", border: "1.5px solid #1A1A1A", color: "#1A1A1A" }}
+                      >
+                        {analysis.mode === "onboarding" ? "전체 분석" : "업데이트"}
+                      </span>
+                      <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                        {analysis.review_scope}
+                      </span>
+                    </div>
+                    <p className="text-sm leading-relaxed" style={{ color: "#4A4A4A" }}>
+                      {analysis.overall_summary}
+                    </p>
+                    <div className="flex items-center gap-3 mt-2 flex-wrap">
+                      {analysis.google_sentiment !== null && (
+                        <span className="text-xs font-bold" style={{ color: "#4285F4" }}>
+                          Google {analysis.google_sentiment}%
+                        </span>
+                      )}
+                      {analysis.apple_sentiment !== null && (
+                        <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
+                          Apple {analysis.apple_sentiment}%
+                        </span>
+                      )}
+                      <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                        샘플 {analysis.sample_count_google + analysis.sample_count_apple}건
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                      {formatDate(analysis.created_at)}
+                    </span>
+                    <ChevronRight size={16} style={{ color: "#9CA3AF" }} />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function RatingPill({ label, rating, color }: { label: string; rating: number | null; color: string }) {
+function formatDate(iso: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function SkeletonDetail() {
   return (
-    <div
-      className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-      style={{ border: "2px solid #1A1A1A", background: "#F0EFEC" }}
-    >
-      <span className="text-xs font-black" style={{ color }}>{label}</span>
-      <span className={`text-base font-black ${ratingColor(rating)}`}>
-        ★ {formatRating(rating)}
-      </span>
+    <div className="space-y-6">
+      <div className="skeleton h-5 w-24 rounded-full" />
+      <div className="skeleton h-40 w-full rounded-2xl" />
+      <div className="skeleton h-32 w-full rounded-2xl" />
+      <div className="skeleton h-48 w-full rounded-2xl" />
     </div>
   );
 }

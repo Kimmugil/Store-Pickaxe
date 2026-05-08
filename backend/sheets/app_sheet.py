@@ -1,6 +1,6 @@
 """
 앱별 스프레드시트 CRUD
-탭: INFO / SNAPSHOTS / GOOGLE_REVIEWS / APPLE_REVIEWS / TIMELINE / ANALYSIS
+탭: COLLECTION_LOG / GOOGLE_REVIEWS / APPLE_REVIEWS / ANALYSIS
 """
 import uuid
 from datetime import datetime, timezone
@@ -17,10 +17,10 @@ _SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-SNAPSHOT_HEADERS = [
-    "date", "google_rating", "apple_rating",
-    "google_review_count", "apple_review_count",
-    "google_version", "apple_version",
+COLLECTION_LOG_HEADERS = [
+    "collected_at", "mode",
+    "google_added", "apple_added",
+    "google_rating", "apple_rating",
 ]
 GOOGLE_REVIEW_HEADERS = [
     "review_id", "rating", "content",
@@ -30,16 +30,8 @@ APPLE_REVIEW_HEADERS = [
     "review_id", "rating", "title", "content",
     "app_version", "reviewed_at", "collected_at",
 ]
-TIMELINE_HEADERS = [
-    "event_id", "event_date", "event_type",
-    "version",
-    "google_rating_before", "google_rating_after",
-    "apple_rating_before", "apple_rating_after",
-    "review_count", "summary", "analysis_id",
-    "google_positive_rate", "apple_positive_rate",
-]
 ANALYSIS_HEADERS = [
-    "analysis_id", "created_at", "trigger_type", "period_label",
+    "analysis_id", "created_at", "mode", "review_scope",
     "overall_summary", "main_complaints", "main_praises",
     "google_sentiment", "apple_sentiment",
     "keywords_google", "keywords_apple",
@@ -69,27 +61,13 @@ def _ensure(ss: gspread.Spreadsheet, title: str, headers: list[str]) -> gspread.
         return ws
 
 
-def _ensure_timeline(ss: gspread.Spreadsheet) -> gspread.Worksheet:
-    """TIMELINE 워크시트를 가져오고, 신규 컬럼이 있으면 헤더에 추가한다 (하위 호환)."""
-    ws = _ensure(ss, "TIMELINE", TIMELINE_HEADERS)
-    existing = ws.row_values(1)
-    for h in TIMELINE_HEADERS:
-        if h not in existing:
-            ws.update_cell(1, len(existing) + 1, h)
-            existing.append(h)
-    return ws
-
-
 # ─── 스프레드시트 초기화 ─────────────────────────────────────────
 
 def setup_spreadsheet(spreadsheet_id: str) -> None:
-    """앱 스프레드시트에 필요한 시트를 모두 생성한다."""
     ss = _open(spreadsheet_id)
-
-    _ensure(ss, "SNAPSHOTS", SNAPSHOT_HEADERS)
+    _ensure(ss, "COLLECTION_LOG", COLLECTION_LOG_HEADERS)
     _ensure(ss, "GOOGLE_REVIEWS", GOOGLE_REVIEW_HEADERS)
     _ensure(ss, "APPLE_REVIEWS", APPLE_REVIEW_HEADERS)
-    _ensure(ss, "TIMELINE", TIMELINE_HEADERS)
     _ensure(ss, "ANALYSIS", ANALYSIS_HEADERS)
 
     # GAS가 만든 기본 Sheet1 제거
@@ -101,64 +79,43 @@ def setup_spreadsheet(spreadsheet_id: str) -> None:
         pass
 
 
-# ─── 스냅샷 ─────────────────────────────────────────────────────
+# ─── 수집 로그 ───────────────────────────────────────────────────
 
-def save_snapshot(spreadsheet_id: str, snapshot: dict) -> None:
+def save_collection_log(
+    spreadsheet_id: str,
+    mode: str,
+    google_added: int,
+    apple_added: int,
+    google_rating: str = "",
+    apple_rating: str = "",
+) -> None:
     ss = _open(spreadsheet_id)
-    ws = _ensure(ss, "SNAPSHOTS", SNAPSHOT_HEADERS)
-
-    today = snapshot.get("date", _today())
-    existing_dates = ws.col_values(1)[1:]  # 헤더 제외
-    if today in existing_dates:
-        # 이미 오늘 스냅샷 존재 → 덮어쓰기
-        idx = existing_dates.index(today) + 2
-        ws.update(
-            f"A{idx}:G{idx}",
-            [[
-                today,
-                snapshot.get("google_rating", ""),
-                snapshot.get("apple_rating", ""),
-                snapshot.get("google_review_count", ""),
-                snapshot.get("apple_review_count", ""),
-                snapshot.get("google_version", ""),
-                snapshot.get("apple_version", ""),
-            ]],
-        )
-    else:
-        ws.append_row([
-            today,
-            snapshot.get("google_rating", ""),
-            snapshot.get("apple_rating", ""),
-            snapshot.get("google_review_count", ""),
-            snapshot.get("apple_review_count", ""),
-            snapshot.get("google_version", ""),
-            snapshot.get("apple_version", ""),
-        ], value_input_option="USER_ENTERED")
+    ws = _ensure(ss, "COLLECTION_LOG", COLLECTION_LOG_HEADERS)
+    ws.append_row([
+        _now(), mode,
+        google_added, apple_added,
+        google_rating, apple_rating,
+    ], value_input_option="USER_ENTERED")
 
 
-def get_snapshots(spreadsheet_id: str) -> list[dict]:
+def get_collection_logs(spreadsheet_id: str) -> list[dict]:
     ss = _open(spreadsheet_id)
-    ws = _ensure(ss, "SNAPSHOTS", SNAPSHOT_HEADERS)
+    ws = _ensure(ss, "COLLECTION_LOG", COLLECTION_LOG_HEADERS)
     return ws.get_all_records()
 
 
-def get_latest_snapshot(spreadsheet_id: str) -> Optional[dict]:
-    snaps = get_snapshots(spreadsheet_id)
-    if not snaps:
-        return None
-    return sorted(snaps, key=lambda s: s.get("date", ""))[-1]
-
-
-# ─── 리뷰 저장 ──────────────────────────────────────────────────
+# ─── 리뷰 ID 조회 ────────────────────────────────────────────────
 
 def get_existing_review_ids(spreadsheet_id: str, platform: str) -> set[str]:
     sheet_name = "GOOGLE_REVIEWS" if platform == "google" else "APPLE_REVIEWS"
+    headers = GOOGLE_REVIEW_HEADERS if platform == "google" else APPLE_REVIEW_HEADERS
     ss = _open(spreadsheet_id)
-    ws = _ensure(ss, sheet_name,
-                 GOOGLE_REVIEW_HEADERS if platform == "google" else APPLE_REVIEW_HEADERS)
+    ws = _ensure(ss, sheet_name, headers)
     ids = ws.col_values(1)[1:]
     return set(ids)
 
+
+# ─── 리뷰 저장 ──────────────────────────────────────────────────
 
 def save_google_reviews(spreadsheet_id: str, reviews: list[dict]) -> int:
     if not reviews:
@@ -166,9 +123,8 @@ def save_google_reviews(spreadsheet_id: str, reviews: list[dict]) -> int:
     ss = _open(spreadsheet_id)
     ws = _ensure(ss, "GOOGLE_REVIEWS", GOOGLE_REVIEW_HEADERS)
     now = _now()
-    rows = []
-    for r in reviews:
-        rows.append([
+    rows = [
+        [
             r.get("review_id", ""),
             r.get("rating", ""),
             r.get("content", ""),
@@ -176,9 +132,10 @@ def save_google_reviews(spreadsheet_id: str, reviews: list[dict]) -> int:
             r.get("reviewed_at", ""),
             r.get("thumbs_up", 0),
             now,
-        ])
-    if rows:
-        ws.append_rows(rows, value_input_option="USER_ENTERED")
+        ]
+        for r in reviews
+    ]
+    ws.append_rows(rows, value_input_option="USER_ENTERED")
     return len(rows)
 
 
@@ -188,9 +145,8 @@ def save_apple_reviews(spreadsheet_id: str, reviews: list[dict]) -> int:
     ss = _open(spreadsheet_id)
     ws = _ensure(ss, "APPLE_REVIEWS", APPLE_REVIEW_HEADERS)
     now = _now()
-    rows = []
-    for r in reviews:
-        rows.append([
+    rows = [
+        [
             r.get("review_id", ""),
             r.get("rating", ""),
             r.get("title", ""),
@@ -198,9 +154,10 @@ def save_apple_reviews(spreadsheet_id: str, reviews: list[dict]) -> int:
             r.get("app_version", ""),
             r.get("reviewed_at", ""),
             now,
-        ])
-    if rows:
-        ws.append_rows(rows, value_input_option="USER_ENTERED")
+        ]
+        for r in reviews
+    ]
+    ws.append_rows(rows, value_input_option="USER_ENTERED")
     return len(rows)
 
 
@@ -216,140 +173,17 @@ def get_apple_reviews(spreadsheet_id: str) -> list[dict]:
     return ws.get_all_records()
 
 
-# ─── 타임라인 ────────────────────────────────────────────────────
-
-def save_timeline_event(spreadsheet_id: str, event: dict) -> str:
-    return save_timeline_events(spreadsheet_id, [event])[0]
-
-
-def save_timeline_events(spreadsheet_id: str, events: list[dict]) -> list[str]:
-    """여러 이벤트를 한 번의 API 호출로 저장 (헤더 중복 조회 방지)."""
-    if not events:
-        return []
-    ss = _open(spreadsheet_id)
-    ws = _ensure_timeline(ss)
-    headers = ws.row_values(1)
-
-    ids = []
-    rows = []
-    for event in events:
-        event_id = event.get("event_id") or f"evt_{uuid.uuid4().hex[:8]}"
-        row_event = dict(event)
-        row_event["event_id"] = event_id
-        rows.append([str(row_event.get(h, "")) for h in headers])
-        ids.append(event_id)
-
-    ws.append_rows(rows, value_input_option="USER_ENTERED")
-    return ids
-
-
-def upsert_monthly_summaries(spreadsheet_id: str, monthly_rates: list[dict]) -> int:
-    """
-    월별 긍정률을 TIMELINE의 monthly_summary 이벤트로 저장 (upsert).
-    Returns: 저장/갱신된 행 수
-    """
-    if not monthly_rates:
-        return 0
-
-    ss = _open(spreadsheet_id)
-    ws = _ensure_timeline(ss)
-    headers = ws.row_values(1)
-
-    all_rows = ws.get_all_values()
-    col_event_id = headers.index("event_id") if "event_id" in headers else 0
-    col_event_type = headers.index("event_type") if "event_type" in headers else 2
-
-    # 기존 monthly_summary 행의 {year_month: row_index(1-based)} 맵
-    existing: dict[str, int] = {}
-    for i, row in enumerate(all_rows[1:], start=2):
-        if len(row) > col_event_type and row[col_event_type] == "monthly_summary":
-            # event_id 형식: ms_YYYYMM
-            eid = row[col_event_id] if len(row) > col_event_id else ""
-            if eid.startswith("ms_") and len(eid) == 9:
-                ym = f"{eid[3:7]}-{eid[7:9]}"
-                existing[ym] = i
-
-    rows_to_append = []
-    saved = 0
-
-    for mr in monthly_rates:
-        ym = mr["year_month"]
-        g_rate = mr.get("google_positive_rate")
-        a_rate = mr.get("apple_positive_rate")
-        g_cnt = mr.get("review_count_google", 0)
-        a_cnt = mr.get("review_count_apple", 0)
-
-        summary_parts = []
-        if g_rate is not None:
-            summary_parts.append(f"Google {g_rate:.0f}%")
-        if a_rate is not None:
-            summary_parts.append(f"Apple {a_rate:.0f}%")
-        summary = " / ".join(summary_parts)
-
-        event_data = {
-            "event_id": f"ms_{ym.replace('-', '')}",
-            "event_date": f"{ym}-01",
-            "event_type": "monthly_summary",
-            "version": "",
-            "google_rating_before": "",
-            "google_rating_after": "",
-            "apple_rating_before": "",
-            "apple_rating_after": "",
-            "review_count": g_cnt + a_cnt,
-            "summary": summary,
-            "analysis_id": "",
-            "google_positive_rate": "" if g_rate is None else g_rate,
-            "apple_positive_rate": "" if a_rate is None else a_rate,
-        }
-        row = [str(event_data.get(h, "")) for h in headers]
-
-        if ym in existing:
-            row_idx = existing[ym]
-            col_end = chr(ord("A") + len(headers) - 1)
-            ws.update(f"A{row_idx}:{col_end}{row_idx}", [row], value_input_option="USER_ENTERED")
-        else:
-            rows_to_append.append(row)
-
-        saved += 1
-
-    if rows_to_append:
-        ws.append_rows(rows_to_append, value_input_option="USER_ENTERED")
-
-    return saved
-
-
-def get_timeline(spreadsheet_id: str) -> list[dict]:
-    ss = _open(spreadsheet_id)
-    ws = _ensure_timeline(ss)
-    return ws.get_all_records()
-
-
-def get_existing_event_dates(spreadsheet_id: str) -> set[str]:
-    events = get_timeline(spreadsheet_id)
-    return {e.get("event_date", "") for e in events}
-
-
-def link_analysis_to_event(spreadsheet_id: str, event_id: str, analysis_id: str) -> None:
-    ss = _open(spreadsheet_id)
-    ws = _ensure(ss, "TIMELINE", TIMELINE_HEADERS)
-    event_ids = ws.col_values(1)[1:]
-    if event_id in event_ids:
-        row_idx = event_ids.index(event_id) + 2
-        ws.update_cell(row_idx, 11, analysis_id)  # analysis_id 컬럼
-
-
 # ─── 분석 결과 ───────────────────────────────────────────────────
 
 def save_analysis(spreadsheet_id: str, result: dict) -> str:
     ss = _open(spreadsheet_id)
     ws = _ensure(ss, "ANALYSIS", ANALYSIS_HEADERS)
-
     analysis_id = result.get("analysis_id") or f"anl_{uuid.uuid4().hex[:8]}"
     ws.append_row([
         analysis_id,
         result.get("created_at", _now()),
-        result.get("trigger_type", ""),
-        result.get("period_label", ""),
+        result.get("mode", ""),
+        result.get("review_scope", ""),
         result.get("overall_summary", ""),
         str(result.get("main_complaints", [])),
         str(result.get("main_praises", [])),
@@ -377,10 +211,7 @@ def get_latest_analysis(spreadsheet_id: str) -> Optional[dict]:
     return sorted(analyses, key=lambda a: a.get("created_at", ""))[-1]
 
 
-# ─── 헬퍼 ──────────────────────────────────────────────────────
+# ─── 헬퍼 ───────────────────────────────────────────────────────
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-def _today() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")

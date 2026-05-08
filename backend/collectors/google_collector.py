@@ -64,7 +64,7 @@ def get_current_rating(package_name: str, country: str = "kr") -> dict:
 def collect_reviews(
     package_name: str,
     existing_ids: set[str],
-    max_count: int = 3000,
+    max_pages: int = 10,
     country: str = "kr",
     lang: str = "ko",
 ) -> list[dict]:
@@ -72,15 +72,15 @@ def collect_reviews(
     신규 리뷰만 수집한다.
     existing_ids에 없는 review_id만 반환.
     기존 리뷰가 연속으로 나오면 조기 종료.
+    max_pages: 최대 페이지 수 (200개/페이지, onboarding=50, update=10)
     """
     collected = []
     continuation_token = None
     consecutive_known = 0
     EARLY_STOP_THRESHOLD = 40   # 연속 기존 리뷰 40개 → 종료
-    MAX_PAGES = 50              # 무한루프 방지: 최대 50페이지(200개씩 = 최대 1만개)
     page_count = 0
 
-    while len(collected) < max_count and page_count < MAX_PAGES:
+    while page_count < max_pages:
         try:
             result, continuation_token = gp_reviews(
                 package_name,
@@ -115,8 +115,8 @@ def collect_reviews(
 
         time.sleep(collect_delay())
 
-    if page_count >= MAX_PAGES:
-        log.warning(f"[google] 최대 페이지({MAX_PAGES}페이지) 도달 — 루프 강제 종료 (pkg={package_name})")
+    if page_count >= max_pages:
+        log.warning(f"[google] 최대 페이지({max_pages}페이지) 도달 — 루프 강제 종료 (pkg={package_name})")
 
     return collected
 

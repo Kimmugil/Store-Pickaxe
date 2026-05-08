@@ -11,48 +11,30 @@ export interface AppMeta {
   icon_url: string;
   google_rating: number | null;
   apple_rating: number | null;
-  collect_frequency: "high" | "medium" | "low";
-  status: "active" | "paused" | "pending";
-  ai_approved: boolean;
-  spreadsheet_id: string;
-  registered_at: string;
-  last_snapshot_at: string;
-  last_collected_at: string;
-  last_analyzed_at: string;
-  pending_ai_trigger: string;
-}
-
-export interface Snapshot {
-  date: string;
-  google_rating: number | null;
-  apple_rating: number | null;
   google_review_count: number | null;
   apple_review_count: number | null;
-  google_version: string;
-  apple_version: string;
+  status: "active" | "paused";
+  spreadsheet_id: string;
+  registered_at: string;
+  last_collected_at: string;
+  last_analyzed_at: string;
+  pending_analysis: boolean;
 }
 
-export interface TimelineEvent {
-  event_id: string;
-  event_date: string;
-  event_type: "version_release" | "sentiment_shift" | "review_surge" | "admin_patch" | "monthly_summary";
-  version: string;
-  google_rating_before: number | null;
-  google_rating_after: number | null;
-  apple_rating_before: number | null;
-  apple_rating_after: number | null;
-  review_count: number | null;
-  summary: string;
-  analysis_id: string;
-  google_positive_rate: number | null;
-  apple_positive_rate: number | null;
+export interface CollectionLog {
+  collected_at: string;
+  mode: "onboarding" | "update";
+  google_added: number;
+  apple_added: number;
+  google_rating: string;
+  apple_rating: string;
 }
 
 export interface Analysis {
   analysis_id: string;
   created_at: string;
-  trigger_type: string;
-  period_label: string;
+  mode: "onboarding" | "update";
+  review_scope: string;
   overall_summary: string;
   main_complaints: string[];
   main_praises: string[];
@@ -73,15 +55,7 @@ export interface Review {
   app_version: string;
   reviewed_at: string;
   thumbs_up?: number;
-}
-
-export interface AppDetail {
-  meta: AppMeta;
-  snapshots: Snapshot[];
-  timeline: TimelineEvent[];
-  analyses: Analysis[];
-  google_reviews: Review[];
-  apple_reviews: Review[];
+  collected_at?: string;
 }
 
 export interface SearchResult {
@@ -101,5 +75,3 @@ export interface MatchSuggestion {
   score: number;
   confidence: "high" | "medium" | "low";
 }
-
-export type Texts = Record<string, string>;

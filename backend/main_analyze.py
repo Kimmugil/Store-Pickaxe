@@ -1,27 +1,25 @@
 """
-AI 분석 진입점 — GitHub Actions analyze.yml에서 실행
+분석 진입점 — GitHub Actions analyze.yml (workflow_dispatch)에서 실행
 
-처리 조건:
-- ai_approved = TRUE
-- pending_ai_trigger 가 비어있지 않음
+환경변수:
+  APP_KEY   분석할 앱 키 (필수)
 
-트리거 종류별 처리:
-- version  : 해당 버전 리뷰 샘플 분석
-- shift    : 급변 전후 7일 리뷰 샘플 분석
-- surge    : 급증 기간 리뷰 샘플 분석
-- manual   : 전체 최신 리뷰 샘플 분석
+동작:
+  1. pending_analysis=TRUE 인지 확인
+  2. 마지막 분석 이후 신규 리뷰 샘플링 (첫 분석이면 전체)
+  3. Gemini 호출 → 결과 저장
+  4. pending_analysis=FALSE 로 변경
 """
 import os
 import sys
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from backend import config as cfg
 from backend.sheets import master_sheet as master
 from backend.sheets import app_sheet as asheet
 from backend.analyzers import sampler
-from backend.analyzers import gemini_analyzer as ai
-from backend.analyzers import review_aggregator as ra
+from backend.analyzers import gemini_analyzer as gemini
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,155 +28,75 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-TARGET_APP_KEY = os.getenv("TARGET_APP_KEY", "")
-
-
-def _period_label_for_trigger(trigger: str, events: list[dict]) -> str:
-    if trigger == "version":
-        for e in reversed(events):
-            if e.get("event_type") == "version_release":
-                return e.get("version", "unknown")
-        return "latest_version"
-    if trigger in ("shift", "surge"):
-        for e in reversed(events):
-            if e.get("event_type") in ("sentiment_shift", "review_surge"):
-                return e.get("event_date", "")[:10]
-        return datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-
-def _filter_for_trigger(
-    trigger: str,
-    events: list[dict],
-    google_reviews: list[dict],
-    apple_reviews: list[dict],
-) -> tuple[list[dict], list[dict], str]:
-    """트리거 종류에 맞는 리뷰 서브셋과 기간 레이블 반환."""
-
-    if trigger == "version":
-        for e in reversed(events):
-            if e.get("event_type") == "version_release":
-                ver = e.get("version", "")
-                if ver:
-                    g = sampler.reviews_for_version(google_reviews, ver)
-                    a = sampler.reviews_for_version(apple_reviews, ver)
-                    return g, a, ver
-        # 버전 필터 없으면 최신 30일
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        g = [r for r in google_reviews if r.get("reviewed_at", "") >= cutoff]
-        a = [r for r in apple_reviews if r.get("reviewed_at", "") >= cutoff]
-        return g, a, "recent"
-
-    if trigger in ("shift", "surge"):
-        # 이벤트 날짜 기준 전후 7일
-        event_date = ""
-        for e in reversed(events):
-            if e.get("event_type") in ("sentiment_shift", "review_surge"):
-                event_date = e.get("event_date", "")
-                break
-        if event_date:
-            start = (datetime.fromisoformat(event_date) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            end = (datetime.fromisoformat(event_date) + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            g = sampler.reviews_in_date_range(google_reviews, start, end)
-            a = sampler.reviews_in_date_range(apple_reviews, start, end)
-            return g, a, event_date
-        # 기간 특정 불가 시 최신 30일
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        g = [r for r in google_reviews if r.get("reviewed_at", "") >= cutoff]
-        a = [r for r in apple_reviews if r.get("reviewed_at", "") >= cutoff]
-        return g, a, "recent"
-
-    if trigger in ("quarterly", "initial"):
-        now = datetime.now(timezone.utc)
-        prev_year, prev_q = ra.prev_quarter(now.year, now.month)
-        label = ra.quarter_label(prev_year, prev_q)
-        g = ra.reviews_in_quarter(google_reviews, prev_year, prev_q)
-        a = ra.reviews_in_quarter(apple_reviews, prev_year, prev_q)
-        if not g and not a:
-            # 분기 리뷰 없으면 최근 90일 fallback
-            cutoff = (now - timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            g = [r for r in google_reviews if r.get("reviewed_at", "") >= cutoff]
-            a = [r for r in apple_reviews if r.get("reviewed_at", "") >= cutoff]
-            label = now.strftime("%Y-%m-%d")
-        return g, a, label
-
-    # manual / 기타: 전체 최신 리뷰
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    g = [r for r in google_reviews if r.get("reviewed_at", "") >= cutoff]
-    a = [r for r in apple_reviews if r.get("reviewed_at", "") >= cutoff]
-    return g, a, "manual"
-
 
 def process_app(app: dict) -> None:
     app_key = app["app_key"]
     ss_id = app.get("spreadsheet_id", "")
-    trigger = app.get("pending_ai_trigger", "")
 
-    if not ss_id or not trigger:
+    if not ss_id:
+        log.error(f"[{app_key}] spreadsheet_id 없음")
         return
 
-    log.info(f"[{app_key}] AI 분석 시작 (trigger={trigger})")
+    log.info(f"[{app_key}] 분석 시작")
 
-    try:
-        google_reviews = asheet.get_google_reviews(ss_id)
-        apple_reviews = asheet.get_apple_reviews(ss_id)
-        events = asheet.get_timeline(ss_id)
+    # ── 마지막 분석 이후 신규 리뷰만 대상 ───────────────────────────
+    latest = asheet.get_latest_analysis(ss_id)
 
-        g_filtered, a_filtered, period_label = _filter_for_trigger(
-            trigger, events, google_reviews, apple_reviews
-        )
+    if latest:
+        since_date = latest.get("created_at", "")[:10]
+        mode = "update"
+        review_scope = f"{since_date} 이후 신규 리뷰"
+    else:
+        since_date = None
+        mode = "onboarding"
+        review_scope = "전체 수집 리뷰"
 
-        g_sample, a_sample = sampler.sample_for_analysis(g_filtered, a_filtered)
+    google_reviews = asheet.get_google_reviews(ss_id)
+    apple_reviews = asheet.get_apple_reviews(ss_id)
 
-        min_required = cfg.min_reviews_for_ai()
-        if len(g_sample) + len(a_sample) < min_required:
-            log.warning(
-                f"[{app_key}] 샘플 부족 ({len(g_sample) + len(a_sample)} < {min_required}), 건너뜀"
-            )
-            master.clear_pending_trigger(app_key)
-            return
+    g_sample, a_sample = sampler.sample_for_analysis(google_reviews, apple_reviews, since_date)
 
-        result = ai.analyze(g_sample, a_sample, trigger, period_label)
-        analysis_id = asheet.save_analysis(ss_id, result)
+    total_sample = len(g_sample) + len(a_sample)
+    min_reviews = cfg.min_reviews_for_ai()
 
-        # 관련 타임라인 이벤트에 분석 ID 연결
-        for e in reversed(events):
-            if e.get("analysis_id") == "" and e.get("event_type") in (
-                "version_release", "sentiment_shift", "review_surge", "admin_patch"
-            ):
-                asheet.link_analysis_to_event(ss_id, e.get("event_id", ""), analysis_id)
-                break
+    if total_sample < min_reviews:
+        log.warning(f"[{app_key}] 샘플 부족 ({total_sample}개 < {min_reviews}개) — 건너뜀")
+        master.set_pending_analysis(app_key, False)
+        return
 
-        # quarterly/initial 트리거는 quarter_label("2025-Q1") 저장 → 중복 분기 방지
-        master.update_app(app_key, {"last_analyzed_at": period_label})
-        master.clear_pending_trigger(app_key)
-        log.info(f"[{app_key}] AI 분석 완료 → {analysis_id}")
+    log.info(f"[{app_key}] 샘플: Google {len(g_sample)}개 + Apple {len(a_sample)}개 ({review_scope})")
 
-    except Exception as e:
-        log.error(f"[{app_key}] AI 분석 실패: {e}")
+    # ── Gemini 분석 ──────────────────────────────────────────────
+    result = gemini.analyze(g_sample, a_sample, mode=mode, review_scope=review_scope)
+
+    # ── 결과 저장 ────────────────────────────────────────────────
+    analysis_id = asheet.save_analysis(ss_id, result)
+    log.info(f"[{app_key}] 분석 저장: {analysis_id}")
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    master.update_app(app_key, {
+        "last_analyzed_at": now,
+        "pending_analysis": "FALSE",
+    })
+    log.info(f"[{app_key}] 완료")
 
 
 def main():
-    all_apps = master.get_all_apps()
-    apps_to_analyze = [
-        a for a in all_apps
-        if a.get("ai_approved", "").upper() == "TRUE"
-        and a.get("pending_ai_trigger", "")
-        and a.get("status") == "active"
-    ]
+    app_key = os.getenv("APP_KEY", "").strip()
+    if not app_key:
+        log.error("APP_KEY 환경변수가 필요합니다.")
+        sys.exit(1)
 
-    if TARGET_APP_KEY:
-        apps_to_analyze = [a for a in apps_to_analyze if a["app_key"] == TARGET_APP_KEY]
+    app = master.get_app(app_key)
+    if not app:
+        log.error(f"앱을 찾을 수 없습니다: {app_key}")
+        sys.exit(1)
 
-    log.info(f"분석 대상 {len(apps_to_analyze)}개 앱")
+    if app.get("pending_analysis", "").upper() != "TRUE":
+        log.info(f"[{app_key}] pending_analysis=FALSE — 건너뜀")
+        return
 
-    for app in apps_to_analyze:
-        try:
-            process_app(app)
-        except Exception as e:
-            log.error(f"[{app.get('app_key')}] 오류: {e}")
-
-    log.info("전체 분석 완료")
+    process_app(app)
 
 
 if __name__ == "__main__":

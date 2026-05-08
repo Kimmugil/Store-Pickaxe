@@ -1,15 +1,19 @@
-name: 리뷰 수집 (daily)
+name: 리뷰 수집
 
 on:
-  schedule:
-    # 매일 새벽 3시 (KST = UTC+9, 즉 UTC 18:00)
-    - cron: "0 18 * * *"
   workflow_dispatch:
     inputs:
-      target_app_key:
-        description: "특정 앱만 처리 (비우면 전체)"
-        required: false
-        default: ""
+      app_key:
+        description: "수집할 앱 키 (필수)"
+        required: true
+      mode:
+        description: "수집 모드: onboarding (전체) | update (신규만)"
+        required: true
+        default: "update"
+        type: choice
+        options:
+          - onboarding
+          - update
 
 jobs:
   collect:
@@ -38,6 +42,6 @@ jobs:
           MASTER_SPREADSHEET_ID: ${{ secrets.MASTER_SPREADSHEET_ID }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
           GAS_WEB_APP_URL: ${{ secrets.GAS_WEB_APP_URL }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          TARGET_APP_KEY: ${{ github.event.inputs.target_app_key }}
+          APP_KEY: ${{ inputs.app_key }}
+          MODE: ${{ inputs.mode }}
         run: python -m backend.main_collect

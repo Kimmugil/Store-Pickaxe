@@ -1,10 +1,10 @@
 /**
- * Google Sheets 읽기 유틸리티 (서버 사이드 전용)
+ * Google Sheets 읽기/쓰기 유틸리티 (서버 사이드 전용)
  * Next.js 서버 컴포넌트 / API 라우트에서만 사용
  */
 import { google } from "googleapis";
 import { unstable_cache } from "next/cache";
-import type { AppMeta, Snapshot, TimelineEvent, Analysis, Review } from "./types";
+import type { AppMeta, CollectionLog, Analysis, Review } from "./types";
 
 function getAuth() {
   const raw = process.env.GOOGLE_CREDENTIALS_JSON;
@@ -59,35 +59,43 @@ function rowsToRecords<T>(rows: string[][]): T[] {
 
 const MASTER_ID = () => process.env.MASTER_SPREADSHEET_ID!;
 
+// MASTER 헤더 (새 스키마)
+const MASTER_HEADERS = [
+  "app_key", "app_name", "developer",
+  "google_package", "apple_app_id", "icon_url",
+  "google_rating", "apple_rating",
+  "google_review_count", "apple_review_count",
+  "status", "spreadsheet_id",
+  "registered_at", "last_collected_at", "last_analyzed_at",
+  "pending_analysis",
+];
+
 export const getAllApps = unstable_cache(
   async (): Promise<AppMeta[]> => {
     try {
-      const rows = await readRange(MASTER_ID(), "MASTER!A:Q");
+      const rows = await readRange(MASTER_ID(), "MASTER!A:P");
       return rowsToRecords<Record<string, string>>(rows).map(normalizeApp);
     } catch {
       return [];
     }
   },
   ["all-apps"],
-  { revalidate: 120, tags: ["all-apps"] }
+  { revalidate: 60, tags: ["all-apps"] }
 );
 
-export const getTexts = unstable_cache(
-  async (): Promise<Record<string, string>> => {
-    try {
-      const rows = await readRange(MASTER_ID(), "UI_TEXTS!A:B");
-      const texts: Record<string, string> = {};
-      for (const row of rows.slice(1)) {
-        if (row[0]) texts[row[0]] = row[1] ?? "";
-      }
-      return texts;
-    } catch {
-      return {};
-    }
-  },
-  ["ui-texts"],
-  { revalidate: 3600 }
-);
+export async function getAllAppsDirect(): Promise<AppMeta[]> {
+  try {
+    const rows = await readRange(MASTER_ID(), "MASTER!A:P");
+    return rowsToRecords<Record<string, string>>(rows).map(normalizeApp);
+  } catch {
+    return [];
+  }
+}
+
+export async function getAppByKeyDirect(appKey: string): Promise<AppMeta | null> {
+  const all = await getAllAppsDirect();
+  return all.find((a) => a.app_key === appKey) ?? null;
+}
 
 export const getConfigValues = unstable_cache(
   async (): Promise<Record<string, string>> => {
@@ -113,30 +121,17 @@ export async function getAdminPassword(): Promise<string> {
 
 // ── 앱별 시트 ────────────────────────────────────────────────────
 
-export const getAppSnapshots = unstable_cache(
-  async (spreadsheetId: string): Promise<Snapshot[]> => {
+export const getCollectionLogs = unstable_cache(
+  async (spreadsheetId: string): Promise<CollectionLog[]> => {
     try {
-      const rows = await readRange(spreadsheetId, "SNAPSHOTS!A:G");
-      return rowsToRecords<Record<string, string>>(rows).map(normalizeSnapshot);
+      const rows = await readRange(spreadsheetId, "COLLECTION_LOG!A:F");
+      return rowsToRecords<Record<string, string>>(rows).map(normalizeLog);
     } catch {
       return [];
     }
   },
-  ["app-snapshots"],
-  { revalidate: 300, tags: ["app-snapshots"] }
-);
-
-export const getAppTimeline = unstable_cache(
-  async (spreadsheetId: string): Promise<TimelineEvent[]> => {
-    try {
-      const rows = await readRange(spreadsheetId, "TIMELINE!A:M");
-      return rowsToRecords<Record<string, string>>(rows).map(normalizeEvent);
-    } catch {
-      return [];
-    }
-  },
-  ["app-timeline"],
-  { revalidate: 300, tags: ["app-timeline"] }
+  ["collection-logs"],
+  { revalidate: 60, tags: ["collection-logs"] }
 );
 
 export const getAppAnalyses = unstable_cache(
@@ -149,78 +144,45 @@ export const getAppAnalyses = unstable_cache(
     }
   },
   ["app-analyses"],
-  { revalidate: 300, tags: ["app-analyses"] }
+  { revalidate: 120, tags: ["app-analyses"] }
 );
 
 export const getAppReviews = unstable_cache(
-  async (
-    spreadsheetId: string,
-    platform: "google" | "apple",
-    limit = 50
-  ): Promise<Review[]> => {
+  async (spreadsheetId: string, platform: "google" | "apple", limit = 100): Promise<Review[]> => {
     try {
       const sheet = platform === "google" ? "GOOGLE_REVIEWS" : "APPLE_REVIEWS";
-      // Google: review_id,rating,content,app_version,reviewed_at,thumbs_up,collected_at (7열)
-      // Apple:  review_id,rating,title,content,app_version,reviewed_at,collected_at (7열)
       const rows = await readRange(spreadsheetId, `${sheet}!A:G`);
-      const records = rowsToRecords<Record<string, string>>(rows).map((r) => {
-        if (platform === "google") {
-          return {
-            review_id: r.review_id ?? "",
-            rating: parseInt(r.rating) || 0,
-            content: r.content ?? "",
-            app_version: r.app_version ?? "",
-            reviewed_at: r.reviewed_at ?? "",
-            thumbs_up: parseInt(r.thumbs_up) || 0,
-          } as Review;
-        } else {
-          return {
-            review_id: r.review_id ?? "",
-            rating: parseInt(r.rating) || 0,
-            title: r.title ?? "",
-            content: r.content ?? "",
-            app_version: r.app_version ?? "",
-            reviewed_at: r.reviewed_at ?? "",
-          } as Review;
-        }
-      });
-      return records
-        .sort((a, b) => (b.reviewed_at > a.reviewed_at ? 1 : -1))
-        .slice(0, limit);
+      const records = rowsToRecords<Record<string, string>>(rows).map((r) =>
+        platform === "google"
+          ? {
+              review_id: r.review_id ?? "",
+              rating: parseInt(r.rating) || 0,
+              content: r.content ?? "",
+              app_version: r.app_version ?? "",
+              reviewed_at: r.reviewed_at ?? "",
+              thumbs_up: parseInt(r.thumbs_up) || 0,
+              collected_at: r.collected_at ?? "",
+            } as Review
+          : {
+              review_id: r.review_id ?? "",
+              rating: parseInt(r.rating) || 0,
+              title: r.title ?? "",
+              content: r.content ?? "",
+              app_version: r.app_version ?? "",
+              reviewed_at: r.reviewed_at ?? "",
+              collected_at: r.collected_at ?? "",
+            } as Review
+      );
+      return records.sort((a, b) => (b.reviewed_at > a.reviewed_at ? 1 : -1)).slice(0, limit);
     } catch {
       return [];
     }
   },
   ["app-reviews"],
-  { revalidate: 600, tags: ["app-reviews"] }
+  { revalidate: 300, tags: ["app-reviews"] }
 );
 
-/**
- * 캐시 없이 특정 앱을 직접 조회 (등록 직후 상세 페이지 등 신선도가 중요한 경우)
- */
-export async function getAppByKeyDirect(appKey: string): Promise<AppMeta | null> {
-  try {
-    const rows = await readRange(MASTER_ID(), "MASTER!A:Q");
-    const all = rowsToRecords<Record<string, string>>(rows).map(normalizeApp);
-    return all.find((a) => a.app_key === appKey) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-// ── MASTER 헤더 상수 ────────────────────────────────────────────
-const MASTER_HEADERS = [
-  "app_key", "app_name", "developer",
-  "google_package", "apple_app_id", "icon_url",
-  "google_rating", "apple_rating",
-  "collect_frequency", "status", "ai_approved",
-  "spreadsheet_id",
-  "registered_at", "last_snapshot_at",
-  "last_collected_at", "last_analyzed_at",
-  "pending_ai_trigger",
-];
-
-// ── 쓰기 (API 라우트 전용) ──────────────────────────────────────
+// ── 쓰기 ─────────────────────────────────────────────────────────
 
 export async function registerAppToMaster(app: {
   app_key: string;
@@ -231,32 +193,31 @@ export async function registerAppToMaster(app: {
   icon_url: string;
   spreadsheet_id: string;
 }): Promise<void> {
-  // 헤더 행이 없으면 먼저 생성 (init_sheets.py 미실행 시 대비)
   try {
     const headerCheck = await readRange(MASTER_ID(), "MASTER!A1:A1");
     if (!headerCheck.length || headerCheck[0]?.[0] !== "app_key") {
-      await writeRange(MASTER_ID(), "MASTER!A1:Q1", [MASTER_HEADERS]);
+      await writeRange(MASTER_ID(), `MASTER!A1:P1`, [MASTER_HEADERS]);
     }
   } catch {
-    // MASTER 탭 자체가 없는 경우 — appendRow에서 오류가 날 수 있으므로 무시하고 진행
+    // MASTER 탭 없는 경우 무시
   }
 
   const now = new Date().toISOString();
-  await appendRow(MASTER_ID(), "MASTER!A:Q", [
+  await appendRow(MASTER_ID(), "MASTER!A:P", [
     app.app_key, app.app_name, app.developer,
     app.google_package, app.apple_app_id, app.icon_url,
-    "", "", "medium", "pending", "FALSE",
-    app.spreadsheet_id, now, "", "", "", "",
+    "", "", "", "",       // ratings + review_counts
+    "active",             // status
+    app.spreadsheet_id,
+    now, "", "", "FALSE", // timestamps + pending_analysis
   ]);
 }
 
 export async function deleteAppFromMaster(appKey: string): Promise<void> {
-  // 행 인덱스 확인 (0-based, 헤더 포함)
   const rows = await readRange(MASTER_ID(), "MASTER!A:A");
   const rowIdx = rows.findIndex((r) => r[0] === appKey);
   if (rowIdx < 0) throw new Error(`앱 '${appKey}'를 찾을 수 없습니다.`);
 
-  // MASTER 시트의 sheetId 조회 (deleteDimension 요청에 필요)
   const auth = getAuth();
   const sheetsApi = google.sheets({ version: "v4", auth });
   const spreadsheet = await sheetsApi.spreadsheets.get({ spreadsheetId: MASTER_ID() });
@@ -266,28 +227,17 @@ export async function deleteAppFromMaster(appKey: string): Promise<void> {
   await sheetsApi.spreadsheets.batchUpdate({
     spreadsheetId: MASTER_ID(),
     requestBody: {
-      requests: [
-        {
-          deleteDimension: {
-            range: {
-              sheetId,
-              dimension: "ROWS",
-              startIndex: rowIdx,       // 0-based: 헤더가 0이면 첫 데이터가 1
-              endIndex: rowIdx + 1,
-            },
-          },
+      requests: [{
+        deleteDimension: {
+          range: { sheetId, dimension: "ROWS", startIndex: rowIdx, endIndex: rowIdx + 1 },
         },
-      ],
+      }],
     },
   });
 }
 
-export async function updateAppField(
-  appKey: string,
-  field: string,
-  value: string
-): Promise<void> {
-  const rows = await readRange(MASTER_ID(), "MASTER!A:Q");
+export async function updateAppField(appKey: string, field: string, value: string): Promise<void> {
+  const rows = await readRange(MASTER_ID(), "MASTER!A:P");
   if (rows.length < 2) return;
   const headers = rows[0];
   const colIdx = headers.indexOf(field);
@@ -304,49 +254,54 @@ export async function updateAppField(
 
 function normalizeApp(r: Record<string, string>): AppMeta {
   return {
-    ...r,
-    google_rating: parseFloat(r.google_rating) || null,
-    apple_rating: parseFloat(r.apple_rating) || null,
-    ai_approved: r.ai_approved?.toUpperCase() === "TRUE",
-  } as unknown as AppMeta;
-}
-
-function normalizeSnapshot(r: Record<string, string>): Snapshot {
-  return {
-    ...r,
+    app_key: r.app_key ?? "",
+    app_name: r.app_name ?? "",
+    developer: r.developer ?? "",
+    google_package: r.google_package ?? "",
+    apple_app_id: r.apple_app_id ?? "",
+    icon_url: r.icon_url ?? "",
     google_rating: parseFloat(r.google_rating) || null,
     apple_rating: parseFloat(r.apple_rating) || null,
     google_review_count: parseInt(r.google_review_count) || null,
     apple_review_count: parseInt(r.apple_review_count) || null,
-  } as Snapshot;
+    status: (r.status as AppMeta["status"]) || "active",
+    spreadsheet_id: r.spreadsheet_id ?? "",
+    registered_at: r.registered_at ?? "",
+    last_collected_at: r.last_collected_at ?? "",
+    last_analyzed_at: r.last_analyzed_at ?? "",
+    pending_analysis: r.pending_analysis?.toUpperCase() === "TRUE",
+  };
 }
 
-function normalizeEvent(r: Record<string, string>): TimelineEvent {
+function normalizeLog(r: Record<string, string>): CollectionLog {
   return {
-    ...r,
-    google_rating_before: parseFloat(r.google_rating_before) || null,
-    google_rating_after: parseFloat(r.google_rating_after) || null,
-    apple_rating_before: parseFloat(r.apple_rating_before) || null,
-    apple_rating_after: parseFloat(r.apple_rating_after) || null,
-    review_count: parseInt(r.review_count) || null,
-    google_positive_rate: r.google_positive_rate !== "" ? parseFloat(r.google_positive_rate) || null : null,
-    apple_positive_rate: r.apple_positive_rate !== "" ? parseFloat(r.apple_positive_rate) || null : null,
-  } as TimelineEvent;
+    collected_at: r.collected_at ?? "",
+    mode: (r.mode as CollectionLog["mode"]) || "update",
+    google_added: parseInt(r.google_added) || 0,
+    apple_added: parseInt(r.apple_added) || 0,
+    google_rating: r.google_rating ?? "",
+    apple_rating: r.apple_rating ?? "",
+  };
 }
 
 function normalizeAnalysis(r: Record<string, string>): Analysis {
-  const safeParse = (s: string) => {
+  const safeParse = (s: string): string[] => {
     try { return JSON.parse(s.replace(/'/g, '"')); } catch { return []; }
   };
   return {
-    ...r,
+    analysis_id: r.analysis_id ?? "",
+    created_at: r.created_at ?? "",
+    mode: (r.mode as Analysis["mode"]) || "onboarding",
+    review_scope: r.review_scope ?? "",
+    overall_summary: r.overall_summary ?? "",
     main_complaints: safeParse(r.main_complaints),
     main_praises: safeParse(r.main_praises),
+    google_sentiment: r.google_sentiment !== "" ? parseFloat(r.google_sentiment) || null : null,
+    apple_sentiment: r.apple_sentiment !== "" ? parseFloat(r.apple_sentiment) || null : null,
     keywords_google: safeParse(r.keywords_google),
     keywords_apple: safeParse(r.keywords_apple),
-    google_sentiment: parseFloat(r.google_sentiment) || null,
-    apple_sentiment: parseFloat(r.apple_sentiment) || null,
+    platform_diff: r.platform_diff ?? "",
     sample_count_google: parseInt(r.sample_count_google) || 0,
     sample_count_apple: parseInt(r.sample_count_apple) || 0,
-  } as Analysis;
+  };
 }

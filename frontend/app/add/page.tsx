@@ -3,14 +3,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Search, CheckCircle, ArrowRight, Zap } from "lucide-react";
-import { useTexts } from "@/components/TextsProvider";
 import type { SearchResult, MatchSuggestion } from "@/lib/types";
 import { formatRating } from "@/lib/utils";
 
 type Step = "search" | "confirm" | "done";
 
 export default function AddPage() {
-  const texts = useTexts();
   const router = useRouter();
 
   const [query, setQuery] = useState("");
@@ -42,7 +40,7 @@ export default function AddPage() {
       setSuggestions(data.suggestions || []);
       setStep("confirm");
     } catch {
-      setError(texts["common.error"] || "검색 중 오류가 발생했습니다.");
+      setError("검색 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -94,23 +92,23 @@ export default function AddPage() {
         </div>
         <div>
           <h2 className="font-black text-2xl text-[#1A1A1A]">
-            {texts["add.success.title"] || "등록 완료!"}
+            등록 완료!
           </h2>
           <p className="text-sm text-[#4A4A4A] mt-2">
-            {texts["add.success.desc"] || "게임이 등록되었습니다."}
+            게임이 등록되었습니다.
           </p>
         </div>
         <div
           className="text-xs text-[#4A4A4A] rounded-2xl px-5 py-4 text-left"
           style={{ background: "#FFFDE7", border: "2px solid #1A1A1A" }}
         >
-          {texts["add.pending_ai.notice"] || "리뷰 수집이 즉시 시작됩니다. AI 분석은 관리자 승인 후 자동으로 진행됩니다."}
+          리뷰 수집이 즉시 시작됩니다. AI 분석은 관리자 승인 후 자동으로 진행됩니다.
         </div>
         <button
           onClick={() => router.push(`/${registeredKey}`)}
           className="neo-button-primary"
         >
-          {texts["common.view"] || "상세 보기"} <ArrowRight size={14} />
+          상세 보기 <ArrowRight size={14} />
         </button>
       </div>
     );
@@ -123,10 +121,10 @@ export default function AddPage() {
       {/* Header */}
       <div>
         <h1 className="font-black text-3xl text-[#1A1A1A]">
-          {texts["add.title"] || "게임 등록"}
+          게임 등록
         </h1>
         <p className="text-sm text-[#9CA3AF] mt-1 font-medium">
-          {texts["add.desc"] || "구글 플레이 또는 앱스토어에서 게임을 검색하세요."}
+          구글 플레이 또는 앱스토어에서 게임을 검색하세요.
         </p>
       </div>
 
@@ -134,7 +132,7 @@ export default function AddPage() {
       <div className="neo-input-wrap">
         <Search size={16} color="#9CA3AF" />
         <input
-          placeholder={texts["add.search.placeholder"] || "게임 이름 입력..."}
+          placeholder="게임 이름 입력..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -145,7 +143,7 @@ export default function AddPage() {
           disabled={loading}
           style={{ border: "none", boxShadow: "none" }}
         >
-          {loading ? (texts["common.loading"] || "검색 중...") : (texts["add.search.button"] || "검색")}
+          {loading ? "검색 중..." : "검색"}
         </button>
       </div>
 
@@ -184,7 +182,7 @@ export default function AddPage() {
                   <div
                     key={i}
                     onClick={() => applySuggestion(s)}
-                    className="neo-card p-4 flex items-center gap-4"
+                    className="card p-4 flex items-center gap-4 cursor-pointer"
                     style={
                       isActive
                         ? { background: "#FFFDE7", borderColor: "#1A1A1A" }
@@ -244,21 +242,21 @@ export default function AddPage() {
             </div>
             <div className="grid grid-cols-2 gap-5">
               <ResultColumn
-                title={texts["add.tab.google"] || "구글 플레이"}
+                title="구글 플레이"
                 results={googleResults}
                 platform="google"
                 selected={selectedGoogle}
                 onSelect={setSelectedGoogle}
-                emptyText={texts["add.no_results.google"] || "결과 없음"}
+                emptyText="결과 없음"
                 color="#4285F4"
               />
               <ResultColumn
-                title={texts["add.tab.apple"] || "앱 스토어"}
+                title="앱 스토어"
                 results={appleResults}
                 platform="apple"
                 selected={selectedApple}
                 onSelect={setSelectedApple}
-                emptyText={texts["add.no_results.apple"] || "결과 없음"}
+                emptyText="결과 없음"
                 color="#1A1A1A"
               />
             </div>
@@ -313,9 +311,7 @@ export default function AddPage() {
               onClick={handleRegister}
               disabled={registering}
             >
-              {registering
-                ? (texts["common.loading"] || "등록 중...")
-                : (texts["add.register.button"] || "등록하기")}
+              {registering ? "등록 중..." : "등록하기"}
               <ArrowRight size={14} />
             </button>
           </div>

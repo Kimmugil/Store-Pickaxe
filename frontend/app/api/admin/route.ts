@@ -1,48 +1,61 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { getAllApps, getAdminPassword, updateAppField, deleteAppFromMaster } from "@/lib/sheets";
+import { getAllAppsDirect, getAdminPassword, updateAppField, deleteAppFromMaster } from "@/lib/sheets";
 
-async function verifyPassword(req: NextRequest, body: Record<string, string>): Promise<boolean> {
-  const submitted = body.password || req.headers.get("x-admin-password") || "";
+async function verifyPassword(body: Record<string, unknown>): Promise<boolean> {
+  const submitted = String(body.password ?? "");
   const correct = await getAdminPassword();
   return submitted === correct && correct !== "";
 }
 
+async function triggerGitHubWorkflow(workflow: string, inputs: Record<string, string>): Promise<void> {
+  const token = process.env.GITHUB_TOKEN;
+  const repo = process.env.GITHUB_REPO; // e.g. "owner/repo"
+  if (!token || !repo) throw new Error("GITHUB_TOKEN 또는 GITHUB_REPO 환경변수가 없습니다.");
+
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ref: "master", inputs }),
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`GitHub API 오류 ${res.status}: ${text}`);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = await req.json() as Record<string, unknown>;
     const { action } = body;
 
-    // 비밀번호 검증이 필요 없는 액션
     if (action === "verify") {
-      const ok = await verifyPassword(req, body);
-      return NextResponse.json({ ok });
+      return NextResponse.json({ ok: await verifyPassword(body) });
     }
 
-    // 이하 모든 액션은 비밀번호 필요
-    const isAdmin = await verifyPassword(req, body);
-    if (!isAdmin) {
-      return NextResponse.json({ error: "인증 실패" }, { status: 401 });
-    }
+    const isAdmin = await verifyPassword(body);
+    if (!isAdmin) return NextResponse.json({ error: "인증 실패" }, { status: 401 });
 
-    const { app_key } = body;
+    const app_key = String(body.app_key ?? "");
 
     switch (action) {
-      case "approve_ai": {
-        await updateAppField(app_key, "ai_approved", "TRUE");
-        await updateAppField(app_key, "status", "active");
-        revalidateTag("all-apps");
-        return NextResponse.json({ ok: true });
+      case "get_apps": {
+        const apps = await getAllAppsDirect();
+        return NextResponse.json({ apps });
       }
 
-      case "reject_ai": {
-        await updateAppField(app_key, "ai_approved", "FALSE");
-        revalidateTag("all-apps");
-        return NextResponse.json({ ok: true });
-      }
-
-      case "activate": {
-        await updateAppField(app_key, "status", "active");
+      case "approve_analysis": {
+        // pending_analysis=TRUE 앱에 대해 GitHub Actions analyze 워크플로우 트리거
+        await triggerGitHubWorkflow("analyze.yml", { app_key });
+        // pending_analysis는 워크플로우 완료 후 Python이 FALSE로 변경
         revalidateTag("all-apps");
         return NextResponse.json({ ok: true });
       }
@@ -53,14 +66,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      case "trigger_analysis": {
-        await updateAppField(app_key, "pending_ai_trigger", "manual");
-        revalidateTag("all-apps");
-        return NextResponse.json({ ok: true });
-      }
-
-      case "mark_patch": {
-        await updateAppField(app_key, "pending_ai_trigger", "manual");
+      case "activate": {
+        await updateAppField(app_key, "status", "active");
         revalidateTag("all-apps");
         return NextResponse.json({ ok: true });
       }
@@ -71,16 +78,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      case "get_apps": {
-        const apps = await getAllApps();
-        return NextResponse.json({ apps });
-      }
-
       default:
         return NextResponse.json({ error: "알 수 없는 액션" }, { status: 400 });
     }
   } catch (e) {
     console.error("[admin]", e);
-    return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
+    return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }

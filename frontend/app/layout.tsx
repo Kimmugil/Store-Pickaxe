@@ -1,27 +1,43 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { getTexts } from "@/lib/sheets";
-import { TextsProvider } from "@/components/TextsProvider";
-import NavBar from "@/components/NavBar";
+import Link from "next/link";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const texts = await getTexts();
-  return {
-    title: texts["site.title"] || "Store-Pickaxe",
-    description: texts["site.description"] || "모바일 게임 리뷰 분석 대시보드",
-  };
-}
+export const metadata: Metadata = {
+  title: "Store Pickaxe",
+  description: "모바일 게임 스토어 리뷰 분석 대시보드",
+};
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const texts = await getTexts();
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
       <body style={{ background: "#FAFAFA" }}>
-        <TextsProvider texts={texts}>
-          <NavBar />
-          <main className="max-w-6xl mx-auto px-4 py-8">{children}</main>
-        </TextsProvider>
+        <nav
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 50,
+            background: "#FFFFFF",
+            borderBottom: "2px solid #1A1A1A",
+            height: "56px",
+          }}
+        >
+          <div
+            className="max-w-5xl mx-auto px-4 h-full flex items-center justify-between"
+          >
+            <div className="flex items-center gap-6">
+              <Link href="/" className="font-black text-base" style={{ color: "#1A1A1A", letterSpacing: "-0.02em" }}>
+                ⛏ Store Pickaxe
+              </Link>
+              <Link href="/" className="text-sm font-bold" style={{ color: "#1A1A1A", opacity: 0.6 }}>
+                앱 목록
+              </Link>
+            </div>
+            <Link href="/admin" className="text-xs font-bold" style={{ color: "#9CA3AF" }}>
+              관리자
+            </Link>
+          </div>
+        </nav>
+        <main className="max-w-5xl mx-auto px-4 py-8">{children}</main>
       </body>
     </html>
   );
