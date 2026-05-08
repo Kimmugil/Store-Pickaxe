@@ -95,6 +95,28 @@ def process_app(app: dict, mode: str) -> None:
         log.error(f"[{app_key}] 모든 플랫폼 수집 실패")
         return
 
+    # ── 출시일 자동 수집 (미설정 시에만, Google 우선 → Apple 폴백) ──
+    if not app.get("release_date", "").strip():
+        release_date = ""
+        if google_pkg:
+            try:
+                detail = gc.get_app_detail(google_pkg)
+                release_date = (detail or {}).get("release_date", "")
+                if release_date:
+                    log.info(f"[{app_key}] 출시일 자동 수집 (Google): {release_date}")
+            except Exception as e:
+                log.warning(f"[{app_key}] Google 출시일 조회 실패: {e}")
+        if not release_date and apple_id:
+            try:
+                detail = ac.get_app_detail(apple_id)
+                release_date = (detail or {}).get("release_date", "")
+                if release_date:
+                    log.info(f"[{app_key}] 출시일 자동 수집 (Apple 폴백): {release_date}")
+            except Exception as e:
+                log.warning(f"[{app_key}] Apple 출시일 조회 실패: {e}")
+        if release_date:
+            master.update_app(app_key, {"release_date": release_date})
+
     # ── 수집 로그 + MASTER 갱신 ───────────────────────────────────
     asheet.save_collection_log(
         ss_id, mode, google_added, apple_added, google_rating, apple_rating

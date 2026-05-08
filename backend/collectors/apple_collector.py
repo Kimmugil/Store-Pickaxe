@@ -60,6 +60,7 @@ def get_app_detail(app_id: str, country: str = "kr") -> Optional[dict]:
             "review_count": r.get("userRatingCount", 0),
             "current_version": r.get("version", ""),
             "description": r.get("description", ""),
+            "release_date": (r.get("releaseDate", "") or "")[:10],
         }
     except Exception:
         return None

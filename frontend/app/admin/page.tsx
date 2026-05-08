@@ -347,7 +347,7 @@ export default function AdminPage() {
                               setReleaseDateValue(app.release_date || "");
                             }}
                           >
-                            출시일: {app.release_date ? formatDate(app.release_date) : "미설정 (클릭하여 입력)"}
+                            출시일: {app.release_date ? formatDate(app.release_date) : "수집 미완료 (클릭하여 수동 입력)"}
                           </button>
                         )}
                       </div>

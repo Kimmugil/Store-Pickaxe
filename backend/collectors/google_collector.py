@@ -44,9 +44,26 @@ def get_app_detail(package_name: str, country: str = "kr", lang: str = "ko") -> 
             "review_count": data.get("reviews", 0),
             "current_version": data.get("version", ""),
             "description": data.get("description", ""),
+            "release_date": _parse_release_date(data.get("released", "")),
         }
     except Exception:
         return None
+
+
+def _parse_release_date(released: str) -> str:
+    """'Jan 15, 2020' 또는 'January 15, 2020' 형식 → 'YYYY-MM-DD'."""
+    if not released:
+        return ""
+    for fmt in ("%b %d, %Y", "%B %d, %Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(released.strip(), fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    # 숫자 날짜 파싱 시도 (타임스탬프인 경우)
+    try:
+        return datetime.fromtimestamp(int(released), tz=timezone.utc).strftime("%Y-%m-%d")
+    except Exception:
+        return ""
 
 
 def get_current_rating(package_name: str, country: str = "kr") -> dict:
