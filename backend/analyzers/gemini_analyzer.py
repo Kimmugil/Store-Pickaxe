@@ -139,8 +139,9 @@ def _build_prompt(
 ※ App Store는 최근 약 500건만 수집 가능합니다. Apple 수집 기간과 동일한 Google Play 리뷰만 사용합니다.
 {chr(10).join(sp_lines)}"""
         platform_diff_instruction = '''\
-  "platform_diff_google": ["Google Play에서만 두드러지는 이슈/불만 (2~3개, 없으면 [])"],
-  "platform_diff_apple": ["App Store에서만 두드러지는 이슈/불만 (2~3개, 없으면 [])"],'''
+  "platform_diff_google": [{"title": "Google Play 고유 이슈 (15자 이내)", "description": "구체적 설명 (40자 이내)"}, ...],
+  "platform_diff_apple": [{"title": "App Store 고유 이슈 (15자 이내)", "description": "구체적 설명 (40자 이내)"}, ...],
+  (각 2~3개, 없으면 [])'''
     else:
         same_period_section = ""
         platform_diff_instruction = '''\

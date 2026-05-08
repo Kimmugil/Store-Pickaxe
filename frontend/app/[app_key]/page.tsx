@@ -149,18 +149,6 @@ export default function AppDetailPage() {
                   <span className="text-xs font-black" style={{ color: "#1A1A1A" }}>
                     {formatDate(analysis.created_at)}
                   </span>
-                  <div className="flex items-center gap-2">
-                    {analysis.google_sentiment !== null && (
-                      <span className="text-xs font-bold" style={{ color: "#4285F4" }}>
-                        G {analysis.google_sentiment}%
-                      </span>
-                    )}
-                    {analysis.apple_sentiment !== null && (
-                      <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
-                        A {analysis.apple_sentiment}%
-                      </span>
-                    )}
-                  </div>
                 </div>
                 {/* 요약 */}
                 <p className="text-sm leading-relaxed" style={{ color: "#4A4A4A" }}>

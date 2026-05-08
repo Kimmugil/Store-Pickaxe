@@ -203,6 +203,25 @@ export const getAppReviews = unstable_cache(
   { revalidate: 300, tags: ["app-reviews"] }
 );
 
+export async function getAppReviewsOldest(spreadsheetId: string, limit = 200): Promise<Review[]> {
+  try {
+    const rows = await readRange(spreadsheetId, "GOOGLE_REVIEWS!A:G");
+    if (rows.length < 2) return [];
+    const records = rowsToRecords<Record<string, string>>(rows);
+    return records.slice(0, limit).map((r) => ({
+      review_id: r.review_id ?? "",
+      rating: parseInt(r.rating) || 0,
+      content: r.content ?? "",
+      app_version: r.app_version ?? "",
+      reviewed_at: r.reviewed_at ?? "",
+      thumbs_up: parseInt(r.thumbs_up) || 0,
+      collected_at: r.collected_at ?? "",
+    }) as Review);
+  } catch {
+    return [];
+  }
+}
+
 export async function getGoogleRatingRows(spreadsheetId: string): Promise<{ rating: number; reviewed_at: string }[]> {
   try {
     const rows = await readRange(spreadsheetId, "GOOGLE_REVIEWS!A:G");
