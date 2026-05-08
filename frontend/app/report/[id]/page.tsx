@@ -396,13 +396,18 @@ function PlatformTab({
         { label: "주의", value: "별점과 리뷰 내용이 불일치하는 경우가 있습니다. 평점 분포는 별점 기준, 주요 이슈는 리뷰 텍스트 기준입니다." },
       ]} />
 
-      {/* #3 — PlatformDiffCard에 Apple 날짜 전달 */}
+      {/* 플랫폼 간 주요 이슈 + 주요 키워드 통합 카드 */}
       <PlatformDiffCard
         platformDiff={analysis.platform_diff}
         googleReviews={googleReviews}
         appleReviews={appleReviews}
         appleDateFrom={appleDateFrom}
         appleDateTo={appleDateTo}
+        keywordsGoogle={analysis.keywords_google}
+        keywordsApple={analysis.keywords_apple}
+        sampleCountGoogle={analysis.sample_count_google}
+        sampleCountApple={analysis.sample_count_apple}
+        onKeywordClick={onKeywordClick}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -423,12 +428,6 @@ function PlatformTab({
           />
         )}
       </div>
-
-      {/* #4 — 주요 키워드 별도 섹션 */}
-      <KeywordsCard
-        analysis={analysis}
-        onKeywordClick={onKeywordClick}
-      />
     </div>
   );
 }
@@ -484,75 +483,23 @@ function PlatformCard({
   );
 }
 
-// ─── 주요 키워드 카드 (독립 섹션) ───────────────────────────────
-
-function KeywordsCard({
-  analysis, onKeywordClick,
-}: {
-  analysis: Analysis;
-  onKeywordClick: (k: string) => void;
-}) {
-  const hasGoogle = analysis.keywords_google.length > 0;
-  const hasApple = analysis.keywords_apple.length > 0;
-  if (!hasGoogle && !hasApple) return null;
-
-  return (
-    <div className="rounded-xl p-5 space-y-4" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
-      <div>
-        <h3 className="text-sm font-black" style={{ color: "#1A1A1A" }}>주요 키워드</h3>
-        <p className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>
-          각 플랫폼 전체 수집 비례 샘플 기반 · Google {analysis.sample_count_google.toLocaleString()}건 + Apple {analysis.sample_count_apple.toLocaleString()}건
-        </p>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {hasGoogle && (
-          <div>
-            <p className="text-xs font-black mb-2" style={{ color: "#4285F4" }}>Google Play</p>
-            <div className="flex flex-wrap gap-1.5">
-              {analysis.keywords_google.map((k, i) => (
-                <button key={i} onClick={() => onKeywordClick(k)}
-                  title="클릭하면 관련 리뷰 보기"
-                  className="text-xs font-medium px-2.5 py-0.5 rounded-full hover:opacity-75 transition-opacity"
-                  style={{ background: "#EBF3FF", border: "1px solid #BFDBFE", color: "#4285F4", cursor: "pointer" }}>
-                  {k}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {hasApple && (
-          <div>
-            <p className="text-xs font-black mb-2" style={{ color: "#1A1A1A" }}>App Store</p>
-            <div className="flex flex-wrap gap-1.5">
-              {analysis.keywords_apple.map((k, i) => (
-                <button key={i} onClick={() => onKeywordClick(k)}
-                  title="클릭하면 관련 리뷰 보기"
-                  className="text-xs font-medium px-2.5 py-0.5 rounded-full hover:opacity-75 transition-opacity"
-                  style={{ background: "#F0EFEC", border: "1px solid #E2E8F0", color: "#4A4A4A", cursor: "pointer" }}>
-                  {k}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── 플랫폼 차이 카드 ────────────────────────────────────────────
+// ─── 플랫폼 차이 + 키워드 통합 카드 ────────────────────────────
 
 function PlatformDiffCard({
   platformDiff, googleReviews, appleReviews, appleDateFrom, appleDateTo,
+  keywordsGoogle, keywordsApple, sampleCountGoogle, sampleCountApple, onKeywordClick,
 }: {
   platformDiff: string;
   googleReviews: TaggedReview[];
   appleReviews: TaggedReview[];
   appleDateFrom?: string;
   appleDateTo?: string;
+  keywordsGoogle: string[];
+  keywordsApple: string[];
+  sampleCountGoogle: number;
+  sampleCountApple: number;
+  onKeywordClick: (k: string) => void;
 }) {
-  if (!platformDiff?.trim()) return null;
-
   let structured: { google_specific?: PlatformIssue[]; apple_specific?: PlatformIssue[] } | null = null;
   try {
     const parsed = JSON.parse(platformDiff);
@@ -561,38 +508,89 @@ function PlatformDiffCard({
     }
   } catch { /* 구형 텍스트 */ }
 
-  const hasContent = structured
-    ? (structured.google_specific?.length || 0) + (structured.apple_specific?.length || 0) > 0
-    : true;
+  const hasDiff = platformDiff?.trim() && (
+    structured
+      ? (structured.google_specific?.length || 0) + (structured.apple_specific?.length || 0) > 0
+      : true
+  );
+  const hasKeywords = keywordsGoogle.length > 0 || keywordsApple.length > 0;
 
-  if (!hasContent) return null;
+  if (!hasDiff && !hasKeywords) return null;
 
   return (
-    <div className="rounded-xl p-5 space-y-3" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-black" style={{ color: "#1A1A1A" }}>플랫폼 간 주요 이슈</h3>
-        <span className="text-xs flex-shrink-0 px-2 py-0.5 rounded-full font-medium"
-          style={{ background: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE" }}>
-          동기간 비교
-        </span>
-      </div>
-      {/* #3 — Apple 수집 기간 기준으로 표시 */}
-      {appleDateFrom && appleDateTo && (
-        <p className="text-xs" style={{ color: "#C4C4C4" }}>
-          App Store 수집기간 기준 · {appleDateFrom} ~ {appleDateTo}
-        </p>
-      )}
-      {structured ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {structured.google_specific && structured.google_specific.length > 0 && (
-            <IssueList title="Google Play 주요 이슈" items={structured.google_specific} color="#4285F4" reviews={googleReviews} />
+    <div className="rounded-xl p-5 space-y-4" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
+      {/* 플랫폼 간 주요 이슈 */}
+      {hasDiff && (
+        <div className="space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="text-sm font-black" style={{ color: "#1A1A1A" }}>플랫폼 간 주요 이슈</h3>
+            <span className="text-xs flex-shrink-0 px-2 py-0.5 rounded-full font-medium"
+              style={{ background: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE" }}>
+              동기간 비교
+            </span>
+          </div>
+          {appleDateFrom && appleDateTo && (
+            <p className="text-xs" style={{ color: "#C4C4C4" }}>
+              App Store 수집기간 기준 · {appleDateFrom} ~ {appleDateTo}
+            </p>
           )}
-          {structured.apple_specific && structured.apple_specific.length > 0 && (
-            <IssueList title="App Store 주요 이슈" items={structured.apple_specific} color="#1A1A1A" reviews={appleReviews} />
+          {structured ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {structured.google_specific && structured.google_specific.length > 0 && (
+                <IssueList title="Google Play 주요 이슈" items={structured.google_specific} color="#4285F4" reviews={googleReviews} />
+              )}
+              {structured.apple_specific && structured.apple_specific.length > 0 && (
+                <IssueList title="App Store 주요 이슈" items={structured.apple_specific} color="#1A1A1A" reviews={appleReviews} />
+              )}
+            </div>
+          ) : (
+            <p className="text-sm leading-relaxed" style={{ color: "#4A4A4A" }}>{platformDiff}</p>
           )}
         </div>
-      ) : (
-        <p className="text-sm leading-relaxed" style={{ color: "#4A4A4A" }}>{platformDiff}</p>
+      )}
+
+      {/* 주요 키워드 — 구분선 후 동일 카드 내 배치 */}
+      {hasKeywords && (
+        <div className={hasDiff ? "pt-4 space-y-3" : "space-y-3"} style={hasDiff ? { borderTop: "1px solid #E2E8F0" } : {}}>
+          <div>
+            <h3 className="text-sm font-black" style={{ color: "#1A1A1A" }}>주요 키워드</h3>
+            <p className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>
+              각 플랫폼 전체 수집 비례 샘플 기반 · Google {sampleCountGoogle.toLocaleString()}건 + Apple {sampleCountApple.toLocaleString()}건
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {keywordsGoogle.length > 0 && (
+              <div>
+                <p className="text-xs font-black mb-2" style={{ color: "#4285F4" }}>Google Play</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {keywordsGoogle.map((k, i) => (
+                    <button key={i} onClick={() => onKeywordClick(k)}
+                      title="클릭하면 관련 리뷰 보기"
+                      className="text-xs font-medium px-2.5 py-0.5 rounded-full hover:opacity-75 transition-opacity"
+                      style={{ background: "#EBF3FF", border: "1px solid #BFDBFE", color: "#4285F4", cursor: "pointer" }}>
+                      {k}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {keywordsApple.length > 0 && (
+              <div>
+                <p className="text-xs font-black mb-2" style={{ color: "#1A1A1A" }}>App Store</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {keywordsApple.map((k, i) => (
+                    <button key={i} onClick={() => onKeywordClick(k)}
+                      title="클릭하면 관련 리뷰 보기"
+                      className="text-xs font-medium px-2.5 py-0.5 rounded-full hover:opacity-75 transition-opacity"
+                      style={{ background: "#F0EFEC", border: "1px solid #E2E8F0", color: "#4A4A4A", cursor: "pointer" }}>
+                      {k}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -699,7 +697,7 @@ function PhasesTab({
         { label: "대상", value: "Google Play 전체 수집 리뷰 (App Store는 최근 ~500건만 수집되어 시기별 분석 불가)" },
         { label: "분석 조건", value: "해당 시기 리뷰 30건 이상인 경우에만 분석 (30건 미만 시기는 생략)" },
         { label: "평균 평점", value: "해당 시기 전체 리뷰 기반 (샘플 아님, 내용 길이와 무관하게 전체 평점 반영) — 별점 단순 평균" },
-        { label: "월별 추이", value: "전체 수집 Google 리뷰 기반 월별 평점 평균 (출시 후 180일 이내, 월 10건 이상 기준)" },
+        { label: "월별 추이", value: "전체 수집 Google 리뷰 기반 월별 평점 평균 (출시 후 365일 이내, 월 10건 이상 기준)" },
         { label: "주의", value: "별점과 리뷰 내용이 불일치하는 경우가 있습니다. 평점은 별점 기준, 트렌드 요약은 리뷰 텍스트 기준입니다." },
       ]} />
 
@@ -708,7 +706,7 @@ function PhasesTab({
         <div>
           <h3 className="text-sm font-black" style={{ color: "#1A1A1A" }}>월별 평점 추이</h3>
           <p className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>
-            Google Play 전체 수집 리뷰 기반 · 출시 후 180일 이내 · 월 10건 이상
+            Google Play 전체 수집 리뷰 기반 · 출시 후 365일 이내 · 월 10건 이상
             {monthlyData && ` (${monthlyData.total_reviews.toLocaleString()}건)`}
           </p>
         </div>
@@ -748,7 +746,7 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
   let sortedMonths = allMonths;
   if (release_date) {
     const cutoffDate = new Date(release_date);
-    cutoffDate.setDate(cutoffDate.getDate() + 180);
+    cutoffDate.setDate(cutoffDate.getDate() + 365);
     const cutoffMonth = cutoffDate.toISOString().slice(0, 7);
     sortedMonths = allMonths
       .filter((m) => m <= cutoffMonth)
