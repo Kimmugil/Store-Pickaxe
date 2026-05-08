@@ -252,33 +252,53 @@ function SummaryTab({
 // ─── 관련 리뷰 검색 ───────────────────────────────────────────────
 
 function findRelatedReviews(title: string, description: string, reviews: TaggedReview[], max = 3): TaggedReview[] {
-  const searchText = `${title} ${description}`;
+  const lowerTitle = title.toLowerCase();
 
+  // 1순위: 제목 전체 포함
   const exactMatches = reviews.filter((r) =>
-    (r.content || "").toLowerCase().includes(title.toLowerCase())
+    (r.content || "").toLowerCase().includes(lowerTitle)
   );
   if (exactMatches.length >= max) return exactMatches.slice(0, max);
 
-  const words = searchText
-    .split(/[\s\/,·]+/)
-    .map((w) => w.replace(/['"''""\[\]()]/g, "").trim())
-    .filter((w) => w.length >= 2);
+  const remaining = reviews.filter((r) => !exactMatches.includes(r));
 
-  if (words.length === 0) return exactMatches.slice(0, max);
+  // 제목에서 3자 이상 단어 추출 (AI 요약어 단위)
+  const splitPattern = /[\s\/,·•]+/;
+  const cleanWord = (w: string) => w.replace(/['"‘’“”\[\]()]/g, "").trim().toLowerCase();
+  const titleWords = title.split(splitPattern).map(cleanWord).filter((w) => w.length >= 3);
 
-  const wordMatches = reviews
-    .filter((r) => !exactMatches.includes(r))
-    .map((r) => {
-      const content = (r.content || "").toLowerCase();
-      const matches = words.filter((w) => content.includes(w.toLowerCase())).length;
-      return { review: r, matches };
-    })
-    .filter(({ matches }) => matches >= 2)
-    .sort((a, b) => b.matches - a.matches)
+  // 제목 단어를 2자 연속 서브스트링으로 분해
+  // 예: "강제접속" → ["강제","제접","접속"] — 리뷰에 "강제 접속"으로 써도 매칭
+  const titleFrags = new Set<string>();
+  for (const word of titleWords) {
+    for (let i = 0; i <= word.length - 2; i++) {
+      titleFrags.add(word.slice(i, i + 2));
+    }
+  }
+  const titleFragArr = [...titleFrags];
+
+  // 설명에서 2자 이상 단어 (보조 신호)
+  const descWords = description.split(splitPattern).map(cleanWord).filter((w) => w.length >= 2);
+
+  const scored = remaining.map((r) => {
+    const content = (r.content || "").toLowerCase();
+    const titleWordHits = titleWords.filter((w) => content.includes(w)).length;
+    const titleFragHits = titleFragArr.filter((f) => content.includes(f)).length;
+    const descHits = descWords.filter((w) => content.includes(w)).length;
+    return {
+      review: r,
+      score: titleWordHits * 10 + titleFragHits * 2 + descHits,
+      qualifies: titleWordHits >= 1 || titleFragHits >= 2 || descHits >= 3,
+    };
+  });
+
+  const candidates = scored
+    .filter((s) => s.qualifies)
+    .sort((a, b) => b.score - a.score)
     .slice(0, max - exactMatches.length)
-    .map(({ review }) => review);
+    .map((s) => s.review);
 
-  return [...exactMatches, ...wordMatches].slice(0, max);
+  return [...exactMatches, ...candidates].slice(0, max);
 }
 
 // ─── 주제 카드 (종합 요약용) ─────────────────────────────────────
