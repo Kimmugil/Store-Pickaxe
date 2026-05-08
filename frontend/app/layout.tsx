@@ -3,6 +3,7 @@ import "./globals.css";
 import Link from "next/link";
 import { getConfigValues, getUITexts } from "@/lib/sheets";
 import { TextsProvider } from "@/components/TextsProvider";
+import { NavLogo } from "@/components/NavLogo";
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getConfigValues();
@@ -31,9 +32,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           >
             <div className="max-w-5xl mx-auto px-4 h-full flex items-center justify-between">
               <div className="flex items-center gap-6">
-                <Link href="/" className="font-black text-base" style={{ color: "#1A1A1A", letterSpacing: "-0.02em" }}>
-                  {initialTexts["site.name"] || "Store Pickaxe"}
-                </Link>
+                <NavLogo />
                 <div className="flex items-center gap-4">
                   <Link href="/" className="text-sm font-bold" style={{ color: "#1A1A1A" }}>
                     홈
