@@ -163,7 +163,15 @@ function SummaryTab({
         )}
         <span style={{ color: "#9CA3AF" }}>
           <span className="font-semibold" style={{ color: "#6B7280" }}>수집 대상</span>{" "}
-          한국어 리뷰 · App Store 최근 ~500건 / Google Play 전체
+          한국어 리뷰 · App Store 최근 ~500건 / Google Play 전체 이력
+        </span>
+        <span style={{ color: "#9CA3AF" }}>
+          <span className="font-semibold" style={{ color: "#6B7280" }}>긍정도 기준</span>{" "}
+          실제 평점 분포 기반 (5★=100% · 4★=75% · 3★=50% · 2★=25% · 1★=0%)
+        </span>
+        <span style={{ color: "#9CA3AF" }}>
+          <span className="font-semibold" style={{ color: "#6B7280" }}>샘플링 기준</span>{" "}
+          저평점 40% · 고평점 40% · 중간 20% (불만 포착 강화)
         </span>
       </div>
 
@@ -202,9 +210,9 @@ function SummaryTab({
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <PhaseCard phase={analysis.google_phase_launch} label="출시 초반" subtitle="0~90일" color="#4285F4" />
-            <PhaseCard phase={analysis.google_phase_growth} label="성장기" subtitle="91~365일" color="#34A853" />
-            <PhaseCard phase={analysis.google_phase_stable} label="안정기" subtitle="365일+" color="#9CA3AF" />
+            <PhaseCard phase={analysis.google_phase_launch} label="출시 초반" subtitle="0~30일" color="#4285F4" />
+            <PhaseCard phase={analysis.google_phase_growth} label="성장기" subtitle="31~180일" color="#34A853" />
+            <PhaseCard phase={analysis.google_phase_stable} label="안정기" subtitle="181일+" color="#9CA3AF" />
           </div>
         </section>
       )}
