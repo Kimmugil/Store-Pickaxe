@@ -314,11 +314,6 @@ export default function HomePage() {
 // ── 카로셀 카드 ───────────────────────────────────────────────────
 
 function RecentCard({ app, analysis }: { app: AppMeta; analysis: Analysis | null }) {
-  const sentiment = analysis
-    ? Math.round(((analysis.google_sentiment ?? 0) + (analysis.apple_sentiment ?? 0)) /
-        ([analysis.google_sentiment, analysis.apple_sentiment].filter((v) => v !== null).length || 1))
-    : null;
-
   return (
     <Link
       href={`/${app.app_key}`}
@@ -327,35 +322,24 @@ function RecentCard({ app, analysis }: { app: AppMeta; analysis: Analysis | null
     >
       {/* 헤더 */}
       <div className="p-4" style={{ borderBottom: "2px solid #1A1A1A" }}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-3 min-w-0">
-            {app.icon_url ? (
-              <img
-                src={app.icon_url} alt={app.app_name} width={44} height={44}
-                className="rounded-xl flex-shrink-0" style={{ border: "2px solid #1A1A1A" }}
-              />
-            ) : (
-              <div
-                className="flex-shrink-0 rounded-xl flex items-center justify-center font-black text-lg"
-                style={{ width: 44, height: 44, background: "#F0EFEC", border: "2px solid #1A1A1A" }}
-              >
-                {app.app_name.charAt(0)}
-              </div>
-            )}
-            <div className="min-w-0">
-              <p className="font-black text-sm truncate" style={{ color: "#1A1A1A" }}>{app.app_name}</p>
-              <p className="text-xs truncate" style={{ color: "#9CA3AF" }}>{app.developer}</p>
-            </div>
-          </div>
-          {sentiment !== null && (
-            <span
-              className={`text-xs font-black px-2 py-0.5 rounded-full flex-shrink-0 ${
-                sentiment >= 60 ? "sentiment-pos" : sentiment >= 40 ? "sentiment-mixed" : "sentiment-neg"
-              }`}
+        <div className="flex items-center gap-3 min-w-0">
+          {app.icon_url ? (
+            <img
+              src={app.icon_url} alt={app.app_name} width={44} height={44}
+              className="rounded-xl flex-shrink-0" style={{ border: "2px solid #1A1A1A" }}
+            />
+          ) : (
+            <div
+              className="flex-shrink-0 rounded-xl flex items-center justify-center font-black text-lg"
+              style={{ width: 44, height: 44, background: "#F0EFEC", border: "2px solid #1A1A1A" }}
             >
-              {sentiment >= 60 ? "긍정적" : sentiment >= 40 ? "보통" : "부정적"}
-            </span>
+              {app.app_name.charAt(0)}
+            </div>
           )}
+          <div className="min-w-0">
+            <p className="font-black text-sm truncate" style={{ color: "#1A1A1A" }}>{app.app_name}</p>
+            <p className="text-xs truncate" style={{ color: "#9CA3AF" }}>{app.developer}</p>
+          </div>
         </div>
       </div>
 
