@@ -93,11 +93,11 @@ export default function HomePage() {
   }
 
   return (
-    <div className="pb-4">
+    <div style={{ minHeight: "calc(100vh - 120px)", display: "flex", flexDirection: "column" }}>
       {/* ── 히어로 + 검색 ────────────────────────────────────────── */}
       <div
         className="flex flex-col items-center justify-center text-center gap-5"
-        style={{ padding: "80px 0 52px" }}
+        style={{ flex: 1, padding: "48px 0 40px" }}
       >
         <div className="space-y-3">
           <h1 className="font-black text-4xl sm:text-5xl" style={{ color: "#1A1A1A", letterSpacing: "-0.04em" }}>
@@ -139,7 +139,7 @@ export default function HomePage() {
 
       {/* ── 최근 등록 게임 카로셀 (항상 표시) ───────────────────── */}
       {recentApps.length > 0 && (
-        <div className="space-y-4">
+        <div className="space-y-4 pb-8">
           <div className="flex items-center justify-between">
             <h2 className="font-black text-base" style={{ color: "#1A1A1A" }}>
               {texts["home.recent.title"] || "최근 등록된 게임"}{" "}
@@ -404,7 +404,7 @@ function RecentCard({ app, analysis }: { app: AppMeta; analysis: Analysis | null
     <Link
       href={`/${app.app_key}`}
       className="flex-shrink-0 card-hover overflow-hidden"
-      style={{ width: 360 }}
+      style={{ width: 380 }}
     >
       {/* 헤더 */}
       <div className="p-4" style={{ borderBottom: "2px solid #1A1A1A" }}>
@@ -456,50 +456,39 @@ function RecentCard({ app, analysis }: { app: AppMeta; analysis: Analysis | null
         className="px-4 py-3 space-y-1"
         style={{ borderTop: "2px solid #1A1A1A", background: "#FAFAFA" }}
       >
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="space-y-1">
           {(app.google_rating || gCollected) && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-black" style={{ color: "#4285F4" }}>G</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span style={{
+                fontSize: 10, fontWeight: 800, color: "#4285F4",
+                background: "#EBF3FF", padding: "1px 6px", borderRadius: 4,
+              }}>Google</span>
               {app.google_rating && (
-                <span className="text-xs font-bold" style={{ color: "#4285F4" }}>
-                  공식 ★{Number(app.google_rating).toFixed(1)}
-                </span>
+                <span style={{ fontSize: 11, color: "#4285F4" }}>스토어 ★{Number(app.google_rating).toFixed(1)}</span>
               )}
               {gCollected !== null && (
-                <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                  수집 ★{gCollected.toFixed(1)}
-                </span>
+                <span style={{ fontSize: 11, color: "#9CA3AF" }}>수집 ★{gCollected.toFixed(1)}</span>
               )}
             </div>
           )}
           {(app.apple_rating || aCollected) && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-black" style={{ color: "#1A1A1A" }}>A</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span style={{
+                fontSize: 10, fontWeight: 800, color: "#4A4A4A",
+                background: "#F0EFEC", padding: "1px 6px", borderRadius: 4,
+              }}>Apple</span>
               {app.apple_rating && (
-                <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
-                  공식 ★{Number(app.apple_rating).toFixed(1)}
-                </span>
+                <span style={{ fontSize: 11, color: "#4A4A4A" }}>스토어 ★{Number(app.apple_rating).toFixed(1)}</span>
               )}
               {aCollected !== null && (
-                <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                  수집 ★{aCollected.toFixed(1)}
-                </span>
+                <span style={{ fontSize: 11, color: "#9CA3AF" }}>수집 ★{aCollected.toFixed(1)}</span>
               )}
             </div>
           )}
-          <span
-            title="공식 평점: 스토어 자체 알고리즘 기반 (최근 리뷰 가중, 앱 업데이트 시 초기화 가능)&#10;수집 평점: Store Pickaxe가 수집한 전체 리뷰의 단순 산술 평균"
-            style={{
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 14, height: 14, borderRadius: "50%",
-              background: "#E2E8F0", color: "#9CA3AF", fontSize: 9, fontWeight: "bold",
-              cursor: "help", flexShrink: 0,
-            }}
-          >?</span>
         </div>
         {analysis?.created_at && (
-          <span className="text-xs" style={{ color: "#9CA3AF" }}>
-            {formatDate(analysis.created_at)}
+          <span className="text-xs" style={{ color: "#C4C4C4" }}>
+            분석 {formatDate(analysis.created_at)}
           </span>
         )}
       </div>
