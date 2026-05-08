@@ -93,11 +93,11 @@ export default function HomePage() {
   }
 
   return (
-    <div className="pb-12">
+    <div className="pb-4">
       {/* ── 히어로 + 검색 ────────────────────────────────────────── */}
       <div
         className="flex flex-col items-center justify-center text-center gap-5"
-        style={{ minHeight: "calc(100vh - 56px - 320px)" }}
+        style={{ padding: "52px 0 36px" }}
       >
         <div className="space-y-3">
           <h1 className="font-black text-4xl sm:text-5xl" style={{ color: "#1A1A1A", letterSpacing: "-0.04em" }}>
@@ -404,7 +404,7 @@ function RecentCard({ app, analysis }: { app: AppMeta; analysis: Analysis | null
     <Link
       href={`/${app.app_key}`}
       className="flex-shrink-0 card-hover overflow-hidden"
-      style={{ width: 300 }}
+      style={{ width: 360 }}
     >
       {/* 헤더 */}
       <div className="p-4" style={{ borderBottom: "2px solid #1A1A1A" }}>
