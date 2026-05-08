@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, RefreshCw, Trash2, AlertTriangle, Sparkles, Pause, Play, Download, RotateCcw } from "lucide-react";
+import { Lock, RefreshCw, Trash2, AlertTriangle, Sparkles, Download, RotateCcw } from "lucide-react";
 import type { AppMeta } from "@/lib/types";
 
 export default function AdminPage() {
@@ -105,7 +105,7 @@ export default function AdminPage() {
   }
 
   const pendingApps = apps.filter((a) => a.pending_analysis);
-  const allApps = apps.filter((a) => a.status === "active" || a.status === "paused");
+  const allApps = apps;
 
   return (
     <div className="space-y-8">
@@ -269,16 +269,6 @@ export default function AdminPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-black" style={{ color: "#1A1A1A" }}>{app.app_name}</span>
-                        <span
-                          className="text-xs font-bold px-2 py-0.5 rounded-full"
-                          style={{
-                            background: app.status === "active" ? "#D1FAE5" : "#F0EFEC",
-                            border: "1.5px solid #1A1A1A",
-                            color: app.status === "active" ? "#065F46" : "#4A4A4A",
-                          }}
-                        >
-                          {app.status === "active" ? "활성" : "중지"}
-                        </span>
                         {app.pending_analysis && (
                           <span
                             className="text-xs font-bold px-2 py-0.5 rounded-full"
@@ -338,25 +328,6 @@ export default function AdminPage() {
                       <RotateCcw size={12} /> AI 재분석
                     </button>
 
-                    {/* 자동 수집 스케줄 활성/중지 */}
-                    {app.status === "active" ? (
-                      <button
-                        className="neo-button text-xs"
-                        disabled={isBusy}
-                        onClick={() => doAction("pause", app.app_key, `'${app.app_name}' 자동 수집 중지`)}
-                        title="자동 스케줄 수집에서 제외 (수동 수집은 계속 가능)"
-                      >
-                        <Pause size={12} /> 자동 수집 중지
-                      </button>
-                    ) : (
-                      <button
-                        className="neo-button text-xs"
-                        disabled={isBusy}
-                        onClick={() => doAction("activate", app.app_key, `'${app.app_name}' 자동 수집 재개`)}
-                      >
-                        <Play size={12} /> 자동 수집 재개
-                      </button>
-                    )}
 
                     <div className="ml-auto">
                       {isDeleting ? (

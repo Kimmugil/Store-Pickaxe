@@ -76,18 +76,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      case "pause": {
-        await updateAppField(app_key, "status", "paused");
-        revalidateTag("all-apps");
-        return NextResponse.json({ ok: true });
-      }
-
-      case "activate": {
-        await updateAppField(app_key, "status", "active");
-        revalidateTag("all-apps");
-        return NextResponse.json({ ok: true });
-      }
-
       case "delete_app": {
         await deleteAppFromMaster(app_key);
         revalidateTag("all-apps");
