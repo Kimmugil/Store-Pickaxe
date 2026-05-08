@@ -119,6 +119,23 @@ export async function getAdminPassword(): Promise<string> {
   return config["ADMIN_PASSWORD"] ?? "";
 }
 
+export const getUITexts = unstable_cache(
+  async (): Promise<Record<string, string>> => {
+    try {
+      const rows = await readRange(MASTER_ID(), "UI_TEXT!A:B");
+      const texts: Record<string, string> = {};
+      for (const row of rows.slice(1)) {
+        if (row[0]) texts[row[0]] = row[1] ?? "";
+      }
+      return texts;
+    } catch {
+      return {};
+    }
+  },
+  ["ui-texts"],
+  { revalidate: 60, tags: ["ui-texts"] }
+);
+
 // ── 앱별 시트 ────────────────────────────────────────────────────
 
 export const getCollectionLogs = unstable_cache(

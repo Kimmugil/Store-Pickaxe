@@ -14,7 +14,8 @@
       "Bash(node_modules/.bin/tsc --noEmit)",
       "Bash(cmd /c \"cd /d \\\\\"C:\\\\Users\\\\kimjaei\\\\OneDrive - NEXON COMPANY\\\\김재이\\\\99. myproject\\\\Store-Pickaxe\\\\.claude\\\\worktrees\\\\zen-banach-3cf4c1\\\\frontend\\\\\" && npx tsc --noEmit 2>&1\")",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(cp \"C:\\\\Users\\\\kimjaei\\\\OneDrive - NEXON COMPANY\\\\김재이\\\\99. myproject\\\\Store-Pickaxe\\\\frontend\\\\app\\\\icon.png\" \"C:\\\\Users\\\\kimjaei\\\\OneDrive - NEXON COMPANY\\\\김재이\\\\99. myproject\\\\Store-Pickaxe\\\\.claude\\\\worktrees\\\\zen-banach-3cf4c1\\\\frontend\\\\app\\\\icon.png\" && echo \"ok\")"
     ]
   }
 }

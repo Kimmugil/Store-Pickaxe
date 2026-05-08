@@ -7,12 +7,14 @@ import Link from "next/link";
 import { Search, CheckCircle, ArrowRight, Zap, ChevronRight } from "lucide-react";
 import type { SearchResult, MatchSuggestion, AppMeta, Analysis } from "@/lib/types";
 import { formatRating } from "@/lib/utils";
+import { useTexts } from "@/components/TextsProvider";
 
 type Step = "idle" | "loading" | "confirm" | "done";
 type EnrichedApp = { app: AppMeta; latestAnalysis: Analysis | null };
 
 export default function HomePage() {
   const router = useRouter();
+  const { texts } = useTexts();
   const [step, setStep] = useState<Step>("idle");
   const [query, setQuery] = useState("");
   const [recentApps, setRecentApps] = useState<EnrichedApp[]>([]);
@@ -117,11 +119,13 @@ export default function HomePage() {
       >
         <div className="space-y-3">
           <h1 className="font-black text-4xl sm:text-5xl" style={{ color: "#1A1A1A", letterSpacing: "-0.04em" }}>
-            모바일 게임 리뷰{" "}
-            <span style={{ background: "#FFD600" }}>한눈에</span>
+            {texts["home.hero.title"] || "모바일 게임 리뷰"}{" "}
+            <span style={{ background: "#FFD600" }}>
+              {texts["home.hero.highlight"] || "한눈에"}
+            </span>
           </h1>
           <p className="text-base font-medium" style={{ color: "#9CA3AF" }}>
-            Google Play & App Store 리뷰를 수집하고 AI로 분석합니다
+            {texts["home.hero.subtitle"] || "Google Play & App Store 리뷰를 수집하고 AI로 분석합니다"}
           </p>
         </div>
 
@@ -130,7 +134,7 @@ export default function HomePage() {
           <div className="neo-input-wrap">
             <Search size={16} color="#9CA3AF" />
             <input
-              placeholder="게임 이름으로 검색 (예: 브롤스타즈)"
+              placeholder={texts["home.search.placeholder"] || "게임 이름으로 검색 (예: 브롤스타즈)"}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -154,7 +158,7 @@ export default function HomePage() {
             </p>
           )}
           <p className="mt-2 text-xs" style={{ color: "#9CA3AF" }}>
-            수집과 분석에 수 분이 소요됩니다
+            {texts["home.search.hint"] || "수집과 분석에 수 분이 소요됩니다"}
           </p>
         </div>
       </div>
@@ -238,7 +242,7 @@ export default function HomePage() {
         <div className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-black text-base" style={{ color: "#1A1A1A" }}>
-              최근 등록된 게임{" "}
+              {texts["home.recent.title"] || "최근 등록된 게임"}{" "}
               <span
                 className="px-2 py-0.5 rounded-xl text-sm"
                 style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
