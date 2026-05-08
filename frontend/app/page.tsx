@@ -97,7 +97,7 @@ export default function HomePage() {
       {/* ── 히어로 + 검색 ────────────────────────────────────────── */}
       <div
         className="flex flex-col items-center justify-center text-center gap-5"
-        style={{ padding: "52px 0 36px" }}
+        style={{ padding: "80px 0 52px" }}
       >
         <div className="space-y-3">
           <h1 className="font-black text-4xl sm:text-5xl" style={{ color: "#1A1A1A", letterSpacing: "-0.04em" }}>
