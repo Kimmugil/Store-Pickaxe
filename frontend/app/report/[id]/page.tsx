@@ -780,6 +780,8 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
   }
 
   const W = 520, H = 220, PAD_L = 36, PAD_R = 16, PAD_T = 24, PAD_B = 36;
+  const BAR_H = 40;
+  const TOTAL_H = H + BAR_H + 6;
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
 
@@ -829,11 +831,15 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
   const hp = hoveredIdx !== null ? points[hoveredIdx] : null;
   const TW = 120, TH = 40;
 
+  const maxCount = Math.max(...points.map((p) => p.count), 1);
+  const barW = points.length > 1
+    ? Math.max(3, (innerW / (points.length - 1)) * 0.5)
+    : 8;
+
   return (
     <div>
-      {/* #5 — height: "auto" 로 컨테이너 너비에 맞게 확장 */}
       <svg
-        viewBox={`0 0 ${W} ${H}`}
+        viewBox={`0 0 ${W} ${TOTAL_H}`}
         style={{ width: "100%", height: "auto", display: "block" }}
         onMouseLeave={() => setHoveredIdx(null)}
       >
@@ -876,6 +882,26 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
           </text>
         ))}
 
+        {/* 볼륨 바 레이블 */}
+        <text x={PAD_L} y={H + 12} fill="#C4C4C4" fontSize={8}>리뷰 볼륨</text>
+
+        {/* 볼륨 바 */}
+        {points.map((p, i) => {
+          const barHeight = Math.max(1, (p.count / maxCount) * (BAR_H - 4));
+          return (
+            <rect
+              key={i}
+              x={p.x - barW / 2}
+              y={TOTAL_H - barHeight}
+              width={barW}
+              height={barHeight}
+              fill="#4285F4"
+              opacity={0.22}
+              rx={1}
+            />
+          );
+        })}
+
         {/* 툴팁 */}
         {hp !== null && (() => {
           const tx = Math.min(hp.x + 8, W - TW - 4);
@@ -893,40 +919,6 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
           );
         })()}
       </svg>
-
-      {/* 리뷰 볼륨 막대 그래프 — 평점 추이와 x축 정렬 */}
-      {(() => {
-        const BAR_H = 44;
-        const maxCount = Math.max(...points.map((p) => p.count), 1);
-        const barW = points.length > 1
-          ? Math.max(3, (innerW / (points.length - 1)) * 0.5)
-          : 8;
-        return (
-          <div style={{ marginTop: 2 }}>
-            <p className="text-xs" style={{ color: "#C4C4C4", paddingLeft: PAD_L }}>리뷰 볼륨 (참고)</p>
-            <svg
-              viewBox={`0 0 ${W} ${BAR_H}`}
-              style={{ width: "100%", height: "auto", display: "block" }}
-            >
-              {points.map((p, i) => {
-                const barHeight = Math.max(1, (p.count / maxCount) * (BAR_H - 4));
-                return (
-                  <rect
-                    key={i}
-                    x={p.x - barW / 2}
-                    y={BAR_H - barHeight}
-                    width={barW}
-                    height={barHeight}
-                    fill="#4285F4"
-                    opacity={0.18}
-                    rx={1}
-                  />
-                );
-              })}
-            </svg>
-          </div>
-        );
-      })()}
 
       {/* 범례 */}
       {phaseZones.length > 0 && (
