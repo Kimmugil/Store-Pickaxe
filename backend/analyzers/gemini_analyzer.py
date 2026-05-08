@@ -3,7 +3,6 @@ Gemini AI 분석 엔진
 """
 import json
 import logging
-import re
 import time
 from datetime import datetime, timezone
 
@@ -27,12 +26,6 @@ def analyze(
     mode: str,
     review_scope: str,
 ) -> dict:
-    """
-    리뷰 샘플을 받아 AI 분석을 수행한다.
-    mode: 'onboarding' | 'update'
-    review_scope: 분석 대상 범위 설명 (예: "전체", "2025-01-01 이후 신규")
-    Returns: 분석 결과 dict
-    """
     g_count = len(google_reviews)
     a_count = len(apple_reviews)
 
@@ -40,8 +33,7 @@ def analyze(
         raise ValueError("분석할 리뷰가 없습니다.")
 
     prompt = _build_prompt(google_reviews, apple_reviews, review_scope)
-    raw = _call_gemini(prompt)
-    result = _parse_response(raw)
+    result = _call_gemini(prompt)
 
     result["mode"] = mode
     result["review_scope"] = review_scope
@@ -81,7 +73,6 @@ def _build_prompt(google_reviews: list[dict], apple_reviews: list[dict], review_
 {all_reviews}
 
 위 리뷰를 분석하여 다음 JSON 형식으로 정확하게 응답하세요.
-반드시 JSON만 출력하고, 마크다운 코드블록 없이 순수 JSON만 응답하세요.
 
 {{
   "overall_summary": "한 문장으로 핵심 상황 요약 (100자 이내)",
@@ -95,7 +86,7 @@ def _build_prompt(google_reviews: list[dict], apple_reviews: list[dict], review_
 }}"""
 
 
-def _call_gemini(prompt: str) -> str:
+def _call_gemini(prompt: str) -> dict:
     client = _client()
     last_exc: Exception | None = None
 
@@ -106,10 +97,15 @@ def _call_gemini(prompt: str) -> str:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.3,
-                    max_output_tokens=4096,
+                    max_output_tokens=8192,
+                    response_mime_type="application/json",
                 ),
             )
-            return response.text or ""
+            text = response.text or ""
+            return json.loads(text)
+        except json.JSONDecodeError as exc:
+            log.error(f"Gemini JSON 파싱 실패 (response_mime_type=json 임에도): {text[:500]}")
+            raise RuntimeError(f"Gemini 응답 파싱 실패: {exc}") from exc
         except Exception as exc:
             last_exc = exc
             exc_str = str(exc)
@@ -121,29 +117,3 @@ def _call_gemini(prompt: str) -> str:
                 raise
 
     raise RuntimeError(f"Gemini API 4회 모두 실패: {last_exc}")
-
-
-def _parse_response(raw: str) -> dict:
-    text = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
-    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
-
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        match = re.search(r"\{[\s\S]+\}", text)
-        if match:
-            try:
-                return json.loads(match.group())
-            except json.JSONDecodeError:
-                pass
-        log.error(f"Gemini 응답 파싱 실패: {text[:200]}")
-        return {
-            "overall_summary": "분석 결과 파싱 실패",
-            "main_complaints": [],
-            "main_praises": [],
-            "google_sentiment": None,
-            "apple_sentiment": None,
-            "keywords_google": [],
-            "keywords_apple": [],
-            "platform_diff": "",
-        }

@@ -37,6 +37,7 @@ ANALYSIS_HEADERS = [
     "keywords_google", "keywords_apple",
     "platform_diff",
     "sample_count_google", "sample_count_apple",
+    "sample_date_min", "sample_date_max",
 ]
 
 
@@ -194,6 +195,8 @@ def save_analysis(spreadsheet_id: str, result: dict) -> str:
         result.get("platform_diff", ""),
         result.get("sample_count_google", 0),
         result.get("sample_count_apple", 0),
+        result.get("sample_date_min", ""),
+        result.get("sample_date_max", ""),
     ], value_input_option="USER_ENTERED")
     return analysis_id
 

@@ -56,7 +56,8 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (data.ok) {
-        setActionMsg({ ok: true, text: `${label} 완료` });
+        const isAsync = ["collect", "collect_full", "reanalyze", "approve_analysis"].includes(action);
+        setActionMsg({ ok: true, text: isAsync ? `${label} — 워크플로우를 시작했습니다 (수 분 소요)` : `${label} 완료` });
         loadApps();
       } else {
         setActionMsg({ ok: false, text: data.error || "오류가 발생했습니다." });

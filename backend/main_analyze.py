@@ -42,7 +42,7 @@ def process_app(app: dict) -> None:
     google_reviews = asheet.get_google_reviews(ss_id)
     apple_reviews = asheet.get_apple_reviews(ss_id)
 
-    g_sample, a_sample = sampler.sample_for_analysis(google_reviews, apple_reviews)
+    g_sample, a_sample, date_min, date_max = sampler.sample_for_analysis(google_reviews, apple_reviews)
 
     total_sample = len(g_sample) + len(a_sample)
     min_reviews = cfg.min_reviews_for_ai()
@@ -52,9 +52,11 @@ def process_app(app: dict) -> None:
         master.set_pending_analysis(app_key, False)
         return
 
-    log.info(f"[{app_key}] 샘플: Google {len(g_sample)}개 + Apple {len(a_sample)}개")
+    log.info(f"[{app_key}] 샘플: Google {len(g_sample)}개 + Apple {len(a_sample)}개 ({date_min} ~ {date_max})")
 
     result = gemini.analyze(g_sample, a_sample, mode="onboarding", review_scope="전체 수집 리뷰")
+    result["sample_date_min"] = date_min
+    result["sample_date_max"] = date_max
 
     analysis_id = asheet.save_analysis(ss_id, result)
     log.info(f"[{app_key}] 분석 저장: {analysis_id}")

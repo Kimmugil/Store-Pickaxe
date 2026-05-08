@@ -62,12 +62,23 @@ def _weighted_sample(reviews: list[dict], target: int) -> list[dict]:
 def sample_for_analysis(
     google_reviews: list[dict],
     apple_reviews: list[dict],
-) -> tuple[list[dict], list[dict]]:
-    """전체 수집 리뷰에서 평점 분포 균형 샘플 추출."""
+) -> tuple[list[dict], list[dict], str, str]:
+    """
+    전체 수집 리뷰에서 평점 분포 균형 샘플 추출.
+    Returns: (g_sample, a_sample, sample_date_min, sample_date_max)
+    """
     google_reviews = _filter_reviews(google_reviews)
     apple_reviews = _filter_reviews(apple_reviews)
 
     g_sample = _weighted_sample(google_reviews, sample_google_count())
     a_sample = _weighted_sample(apple_reviews, sample_apple_count())
 
-    return g_sample, a_sample
+    all_dates = [
+        r.get("reviewed_at", "")
+        for r in g_sample + a_sample
+        if r.get("reviewed_at", "")
+    ]
+    date_min = min(all_dates)[:10] if all_dates else ""
+    date_max = max(all_dates)[:10] if all_dates else ""
+
+    return g_sample, a_sample, date_min, date_max

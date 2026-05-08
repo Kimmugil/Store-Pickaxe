@@ -13,7 +13,7 @@ export interface AppMeta {
   apple_rating: number | null;
   google_review_count: number | null;
   apple_review_count: number | null;
-  status: "active" | "paused";
+  status?: string;
   spreadsheet_id: string;
   registered_at: string;
   last_collected_at: string;
@@ -45,6 +45,8 @@ export interface Analysis {
   platform_diff: string;
   sample_count_google: number;
   sample_count_apple: number;
+  sample_date_min?: string;
+  sample_date_max?: string;
 }
 
 export interface Review {

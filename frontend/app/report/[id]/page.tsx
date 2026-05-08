@@ -133,6 +133,30 @@ export default function ReportPage() {
 function SummaryTab({ analysis }: { analysis: Analysis }) {
   return (
     <div className="space-y-5">
+      {/* 분석 기준 메타데이터 */}
+      <div
+        className="rounded-xl px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs"
+        style={{ background: "#F0EFEC", border: "1.5px solid #E2E8F0" }}
+      >
+        <MetaCell label="분석 시점" value={formatDate(analysis.created_at)} />
+        <MetaCell
+          label="샘플 수"
+          value={`Google ${analysis.sample_count_google}건 + Apple ${analysis.sample_count_apple}건`}
+        />
+        <MetaCell
+          label="샘플 리뷰 기간"
+          value={
+            analysis.sample_date_min && analysis.sample_date_max
+              ? `${analysis.sample_date_min} ~ ${analysis.sample_date_max}`
+              : "—"
+          }
+        />
+        <MetaCell
+          label="샘플링 기준"
+          value="저평점 40% · 고평점 40% · 중간 20% (평점 분포 균형)"
+        />
+      </div>
+
       {/* 긍정도 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {analysis.google_sentiment !== null && (
@@ -358,6 +382,15 @@ function ReviewsTab({
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function MetaCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="font-black uppercase tracking-wide mb-0.5" style={{ color: "#9CA3AF", fontSize: 10 }}>{label}</p>
+      <p className="font-bold leading-snug" style={{ color: "#4A4A4A" }}>{value}</p>
     </div>
   );
 }
