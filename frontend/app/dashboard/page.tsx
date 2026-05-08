@@ -1,5 +1,6 @@
 import { getAllApps, getAppAnalyses, getCollectionLogs } from "@/lib/sheets";
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import type { AppMeta, Analysis, CollectionLog } from "@/lib/types";
 
 export const revalidate = 60;
@@ -89,7 +90,7 @@ function AppCard({
   const aCollected = computeAvgFromDist(latestAnalysis?.apple_rating_dist);
 
   return (
-    <Link href={`/${app.app_key}`} className="block card-hover p-0 overflow-hidden">
+    <div className="card overflow-hidden" style={{ display: "flex", flexDirection: "column" }}>
       <div className="flex items-start gap-4 p-5" style={{ borderBottom: "1px solid #E2E8F0" }}>
         {app.icon_url ? (
           <img
@@ -120,47 +121,36 @@ function AppCard({
           </div>
           <p className="text-sm mt-0.5 truncate" style={{ color: "#9CA3AF" }}>{app.developer}</p>
 
-          {/* 이중 평점: 공식 스토어 + 수집 평균 */}
-          <div className="flex items-start gap-3 mt-2 flex-wrap">
+          {/* 이중 평점: 스토어 공식 + 수집 평균 */}
+          <div className="space-y-1 mt-2">
             {(app.google_rating || gCollected) && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-black" style={{ color: "#4285F4" }}>G</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span style={{
+                  fontSize: 10, fontWeight: 800, color: "#4285F4",
+                  background: "#EBF3FF", padding: "1px 6px", borderRadius: 4,
+                }}>Google</span>
                 {app.google_rating && (
-                  <span className="text-xs font-bold" style={{ color: "#4285F4" }}>
-                    공식 ★{Number(app.google_rating).toFixed(1)}
-                  </span>
+                  <span className="text-xs" style={{ color: "#4285F4" }}>스토어 ★{Number(app.google_rating).toFixed(1)}</span>
                 )}
                 {gCollected !== null && (
-                  <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                    수집 ★{gCollected.toFixed(1)}
-                  </span>
+                  <span className="text-xs" style={{ color: "#9CA3AF" }}>수집 ★{gCollected.toFixed(1)}</span>
                 )}
               </div>
             )}
             {(app.apple_rating || aCollected) && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-black" style={{ color: "#1A1A1A" }}>A</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span style={{
+                  fontSize: 10, fontWeight: 800, color: "#4A4A4A",
+                  background: "#F0EFEC", padding: "1px 6px", borderRadius: 4,
+                }}>Apple</span>
                 {app.apple_rating && (
-                  <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
-                    공식 ★{Number(app.apple_rating).toFixed(1)}
-                  </span>
+                  <span className="text-xs" style={{ color: "#4A4A4A" }}>스토어 ★{Number(app.apple_rating).toFixed(1)}</span>
                 )}
                 {aCollected !== null && (
-                  <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                    수집 ★{aCollected.toFixed(1)}
-                  </span>
+                  <span className="text-xs" style={{ color: "#9CA3AF" }}>수집 ★{aCollected.toFixed(1)}</span>
                 )}
               </div>
             )}
-            <span
-              title="공식 평점: 스토어 자체 알고리즘 기반 (최근 리뷰 가중, 앱 업데이트 시 초기화 가능)&#10;수집 평점: Store Pickaxe가 수집한 전체 리뷰의 단순 산술 평균"
-              style={{
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                width: 14, height: 14, borderRadius: "50%",
-                background: "#E2E8F0", color: "#9CA3AF", fontSize: 9, fontWeight: "bold",
-                cursor: "help", flexShrink: 0,
-              }}
-            >?</span>
           </div>
         </div>
       </div>
@@ -178,13 +168,20 @@ function AppCard({
       </div>
 
       <div
-        className="flex items-center px-5 py-3"
-        style={{ borderTop: "1px solid #E2E8F0", background: "#FAFAFA" }}
+        className="flex items-center justify-between px-5 py-3"
+        style={{ borderTop: "1px solid #E2E8F0", background: "#FAFAFA", marginTop: "auto" }}
       >
         <span className="text-xs font-bold" style={{ color: "#9CA3AF" }}>
           리뷰 {totalReviews.toLocaleString()}건
         </span>
+        <Link
+          href={`/${app.app_key}`}
+          className="neo-button"
+          style={{ padding: "6px 14px", fontSize: 12 }}
+        >
+          리포트 확인하기 <ChevronRight size={12} />
+        </Link>
       </div>
-    </Link>
+    </div>
   );
 }

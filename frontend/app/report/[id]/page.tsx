@@ -26,6 +26,15 @@ type PlatformIssue = string | { title: string; description: string };
 type Tab = "summary" | "platform" | "phases" | "reviews";
 type TaggedReview = Review & { _platform: "google" | "apple" };
 
+function computeAvgFromDist(dist: Record<string, number> | undefined): number | null {
+  if (!dist) return null;
+  const entries = Object.entries(dist);
+  if (entries.length === 0) return null;
+  let total = 0, count = 0;
+  for (const [star, cnt] of entries) { total += Number(star) * cnt; count += cnt; }
+  return count > 0 ? Math.round(total / count * 10) / 10 : null;
+}
+
 function ReportContent() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -59,6 +68,8 @@ function ReportContent() {
   );
 
   const { analysis, meta, google_reviews, apple_reviews } = data;
+  const gCollected = computeAvgFromDist(analysis.google_rating_dist);
+  const aCollected = computeAvgFromDist(analysis.apple_rating_dist);
 
   const taggedGoogle: TaggedReview[] = google_reviews.map((r) => ({ ...r, _platform: "google" as const }));
   const taggedApple: TaggedReview[] = apple_reviews.map((r) => ({ ...r, _platform: "apple" as const }));
@@ -95,6 +106,38 @@ function ReportContent() {
                 <span>샘플 {(analysis.sample_count_google + analysis.sample_count_apple).toLocaleString()}건</span>
                 {meta.release_date && <span>출시 {meta.release_date}</span>}
               </p>
+              {(meta.google_rating || gCollected || meta.apple_rating || aCollected) && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                  {(meta.google_rating || gCollected) && (
+                    <div className="flex items-center gap-2">
+                      <span style={{
+                        fontSize: 10, fontWeight: 800, color: "#4285F4",
+                        background: "#EBF3FF", padding: "1px 6px", borderRadius: 4,
+                      }}>Google</span>
+                      {meta.google_rating && (
+                        <span className="text-xs" style={{ color: "#4285F4" }}>스토어 ★{Number(meta.google_rating).toFixed(1)}</span>
+                      )}
+                      {gCollected !== null && (
+                        <span className="text-xs" style={{ color: "#9CA3AF" }}>수집 ★{gCollected.toFixed(1)}</span>
+                      )}
+                    </div>
+                  )}
+                  {(meta.apple_rating || aCollected) && (
+                    <div className="flex items-center gap-2">
+                      <span style={{
+                        fontSize: 10, fontWeight: 800, color: "#4A4A4A",
+                        background: "#F0EFEC", padding: "1px 6px", borderRadius: 4,
+                      }}>Apple</span>
+                      {meta.apple_rating && (
+                        <span className="text-xs" style={{ color: "#4A4A4A" }}>스토어 ★{Number(meta.apple_rating).toFixed(1)}</span>
+                      )}
+                      {aCollected !== null && (
+                        <span className="text-xs" style={{ color: "#9CA3AF" }}>수집 ★{aCollected.toFixed(1)}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -846,12 +889,13 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
         {/* 시기 zone 배경 */}
         {phaseZones.map((zone, i) => (
           <rect key={i} x={zone.x1} y={PAD_T} width={zone.x2 - zone.x1} height={innerH}
-            fill={zone.fill} opacity={0.7} />
+            fill={zone.fill} opacity={0.45} />
         ))}
 
-        {/* 볼륨 바 — 차트 영역 내부, 격자선 아래 레이어 */}
+        {/* 볼륨 바 — 차트 하단 25% 영역에만 표시 (라인·포인트 겹침 방지) */}
         {points.map((p, i) => {
-          const barHeight = Math.max(1, (p.count / maxCount) * innerH);
+          const barMaxH = innerH * 0.25;
+          const barHeight = Math.max(2, (p.count / maxCount) * barMaxH);
           return (
             <rect
               key={i}
@@ -860,7 +904,7 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
               width={barW}
               height={barHeight}
               fill="#4285F4"
-              opacity={0.15}
+              opacity={0.18}
               rx={1}
             />
           );
