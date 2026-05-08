@@ -921,6 +921,7 @@ function PhaseCard({
 
   // #7 — on-demand fetch from /api/phase_reviews (date-range filter, all reviews)
   function handleToggle() {
+    if (!phase) return;
     if (!reviewsOpen && phaseReviews === null && !reviewsLoading) {
       setReviewsLoading(true);
       fetch(
