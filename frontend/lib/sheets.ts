@@ -154,14 +154,14 @@ export const getCollectionLogs = unstable_cache(
 export const getAppAnalyses = unstable_cache(
   async (spreadsheetId: string): Promise<Analysis[]> => {
     try {
-      const rows = await readRange(spreadsheetId, "ANALYSIS!A:N");
+      const rows = await readRange(spreadsheetId, "ANALYSIS!A:P");
       return rowsToRecords<Record<string, string>>(rows).map(normalizeAnalysis);
     } catch {
       return [];
     }
   },
   ["app-analyses"],
-  { revalidate: 120, tags: ["app-analyses"] }
+  { revalidate: 30, tags: ["app-analyses"] }
 );
 
 export const getAppReviews = unstable_cache(
@@ -320,5 +320,7 @@ function normalizeAnalysis(r: Record<string, string>): Analysis {
     platform_diff: r.platform_diff ?? "",
     sample_count_google: parseInt(r.sample_count_google) || 0,
     sample_count_apple: parseInt(r.sample_count_apple) || 0,
+    sample_date_min: r.sample_date_min ?? "",
+    sample_date_max: r.sample_date_max ?? "",
   };
 }
