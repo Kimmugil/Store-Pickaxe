@@ -2,7 +2,6 @@
 마스터 스프레드시트 CRUD
 탭: MASTER / CONFIG / UI_TEXTS
 """
-import time
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Optional
@@ -21,13 +20,11 @@ MASTER_HEADERS = [
     "app_key", "app_name", "developer",
     "google_package", "apple_app_id", "icon_url",
     "google_rating", "apple_rating",
-    "collect_frequency",           # high | medium | low
-    "status",                      # active | paused | pending
-    "ai_approved",                 # TRUE | FALSE
+    "google_review_count", "apple_review_count",
+    "status",           # active | paused
     "spreadsheet_id",
-    "registered_at", "last_snapshot_at",
-    "last_collected_at", "last_analyzed_at",
-    "pending_ai_trigger",          # version | shift | surge | manual | ""
+    "registered_at", "last_collected_at", "last_analyzed_at",
+    "pending_analysis", # TRUE | FALSE
 ]
 
 
@@ -60,17 +57,11 @@ def get_all_apps() -> list[dict]:
     rows = ws.get_all_values()
     if not rows:
         return []
-    # 첫 행이 실제 헤더인지 확인 (init_sheets.py 미실행 시 데이터가 헤더 자리에 올 수 있음)
-    if rows[0] and rows[0][0] == "app_key":
-        headers = rows[0]
-        data_rows = rows[1:]
-    else:
-        # 헤더가 없으면 표준 헤더로 파싱
-        headers = MASTER_HEADERS
-        data_rows = rows
+    headers = rows[0] if rows[0][0] == "app_key" else MASTER_HEADERS
+    data_rows = rows[1:] if rows[0][0] == "app_key" else rows
     result = []
     for row in data_rows:
-        if not any(row):   # 빈 행 건너뜀
+        if not any(row):
             continue
         record = {headers[i] if i < len(headers) else "extra": (row[i] if i < len(row) else "")
                   for i in range(len(headers))}
@@ -96,11 +87,10 @@ def register_app(info: dict) -> None:
     ss = _master_ss()
     ws = _ensure_sheet(ss, "MASTER", MASTER_HEADERS)
 
-    existing = ws.col_values(1)  # app_key 컬럼
+    existing = ws.col_values(1)
     if info["app_key"] in existing:
         return
 
-    now = _now()
     row = [
         info.get("app_key", ""),
         info.get("app_name", ""),
@@ -108,13 +98,13 @@ def register_app(info: dict) -> None:
         info.get("google_package", ""),
         info.get("apple_app_id", ""),
         info.get("icon_url", ""),
-        "",          # google_rating (수집 전)
-        "",          # apple_rating (수집 전)
-        "medium",    # collect_frequency 초기값
-        "pending",   # status — 관리자 승인 전 수집 시작 안 함
-        "FALSE",     # ai_approved
+        "",         # google_rating
+        "",         # apple_rating
+        "",         # google_review_count
+        "",         # apple_review_count
+        "active",   # status
         info.get("spreadsheet_id", ""),
-        now, "", "", "", "",
+        _now(), "", "", "FALSE",
     ]
     ws.append_row(row, value_input_option="USER_ENTERED")
 
@@ -124,7 +114,6 @@ def register_app(info: dict) -> None:
 def update_app(app_key: str, fields: dict) -> None:
     ss = _master_ss()
     ws = _ensure_sheet(ss, "MASTER", MASTER_HEADERS)
-
     headers = ws.row_values(1)
     all_rows = ws.get_all_values()
 
@@ -144,23 +133,21 @@ def update_app(app_key: str, fields: dict) -> None:
     raise ValueError(f"앱 '{app_key}'를 찾을 수 없습니다.")
 
 
-def set_status(app_key: str, status: str) -> None:
-    update_app(app_key, {"status": status})
+def set_pending_analysis(app_key: str, pending: bool) -> None:
+    update_app(app_key, {"pending_analysis": "TRUE" if pending else "FALSE"})
 
 
-def set_ai_approved(app_key: str, approved: bool) -> None:
-    update_app(app_key, {"ai_approved": "TRUE" if approved else "FALSE"})
+def delete_app(app_key: str) -> None:
+    ss = _master_ss()
+    ws = _ensure_sheet(ss, "MASTER", MASTER_HEADERS)
+    all_rows = ws.get_all_values()
+    for i, row in enumerate(all_rows[1:], start=2):
+        if row[0] == app_key:
+            ws.delete_rows(i)
+            return
 
 
-def set_pending_trigger(app_key: str, trigger: str) -> None:
-    update_app(app_key, {"pending_ai_trigger": trigger})
-
-
-def clear_pending_trigger(app_key: str) -> None:
-    update_app(app_key, {"pending_ai_trigger": ""})
-
-
-# ─── UI_TEXTS / CONFIG ──────────────────────────────────────────
+# ─── CONFIG / UI_TEXTS ──────────────────────────────────────────
 
 def get_ui_texts() -> dict[str, str]:
     ss = _master_ss()
@@ -194,7 +181,7 @@ def get_admin_password() -> str:
     return get_config_values().get("ADMIN_PASSWORD", "")
 
 
-# ─── 헬퍼 ──────────────────────────────────────────────────────
+# ─── 헬퍼 ───────────────────────────────────────────────────────
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

@@ -118,7 +118,10 @@ def _get_amp_token(app_id: str, country: str = "kr") -> str:
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
-            ctx = browser.new_context(user_agent=_UA)
+            ctx = browser.new_context(
+                user_agent=_UA,
+                extra_http_headers={"Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8"},
+            )
             page = ctx.new_page()
 
             def _on_request(req):
@@ -131,18 +134,36 @@ def _get_amp_token(app_id: str, country: str = "kr") -> str:
                     _log.info("[apple] Playwright: AMP 토큰 캡처 성공")
 
             page.on("request", _on_request)
+
+            # domcontentloaded로 먼저 로드 후 추가 대기 (networkidle은 너무 오래 걸림)
             try:
                 page.goto(
                     f"https://apps.apple.com/{country}/app/id{app_id}",
-                    wait_until="networkidle",
+                    wait_until="domcontentloaded",
                     timeout=30_000,
                 )
+                # AMP 요청이 발생할 때까지 최대 10초 추가 대기
+                for _ in range(20):
+                    if token:
+                        break
+                    page.wait_for_timeout(500)
             except PWTimeout:
-                pass  # 타임아웃이어도 토큰을 이미 캡처했을 수 있음
+                pass
             except Exception as e:
                 _log.warning(f"[apple] Playwright 페이지 로드 오류: {e}")
-            finally:
-                browser.close()
+
+            # 토큰 미수신 시 리뷰 섹션으로 스크롤하여 AMP 요청 유도
+            if not token:
+                try:
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+                    for _ in range(10):
+                        if token:
+                            break
+                        page.wait_for_timeout(500)
+                except Exception:
+                    pass
+
+            browser.close()
     except Exception as e:
         _log.warning(f"[apple] Playwright 토큰 추출 실패: {e}")
 

@@ -2,7 +2,19 @@
   "permissions": {
     "allow": [
       "WebSearch",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(dir \"C:\\\\Users\\\\kimjaei\\\\OneDrive - NEXON COMPANY\\\\김재이\\\\99. myproject\" /b)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\kimjaei\\\\OneDrive - NEXON COMPANY\\\\김재이\\\\99. myproject\" -Name)",
+      "Bash(Sort-Object)",
+      "Bash(rm '/mnt/c/Users/kimjaei/OneDrive - NEXON COMPANY/김재이/99. myproject/Store-Pickaxe/.claude/worktrees/zen-banach-3cf4c1/backend/analyzers/shift_detector.py')",
+      "Bash(rm '/mnt/c/Users/kimjaei/OneDrive - NEXON COMPANY/김재이/99. myproject/Store-Pickaxe/.claude/worktrees/zen-banach-3cf4c1/backend/analyzers/review_aggregator.py')",
+      "Read(//mnt/c/Users/kimjaei/OneDrive - NEXON COMPANY/김재이/99. myproject/Store-Pickaxe/.claude/worktrees/zen-banach-3cf4c1/backend/**)",
+      "Bash(mkdir -p \"frontend/app/report/[id]\" && echo \"디렉토리 생성 완료\")",
+      "Bash(npx tsc *)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(cmd /c \"cd /d \\\\\"C:\\\\Users\\\\kimjaei\\\\OneDrive - NEXON COMPANY\\\\김재이\\\\99. myproject\\\\Store-Pickaxe\\\\.claude\\\\worktrees\\\\zen-banach-3cf4c1\\\\frontend\\\\\" && npx tsc --noEmit 2>&1\")",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

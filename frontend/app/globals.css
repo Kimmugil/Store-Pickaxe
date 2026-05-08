@@ -11,48 +11,53 @@
     --positive: #56D0A0;
     --negative: #FF6B6B;
     --border: #1A1A1A;
-    --surface: #FFFFFF;
-    --raised: #F0EFEC;
-    --text-primary: #1A1A1A;
-    --text-secondary: #4A4A4A;
-    --text-muted: #9CA3AF;
   }
-  body {
+  html, body {
     background-color: #FAFAFA;
     color: #1A1A1A;
-    @apply antialiased;
-    font-family: "Pretendard", "Inter", system-ui, sans-serif;
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #E2E8F0 transparent;
+  }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
+  *:focus-visible { outline: 2px solid #FFD600; outline-offset: 2px; }
 }
 
 @layer components {
-  /* ── Neo-Brutalism Core ── */
-  .neo-card {
+
+  /* ── 카드: 테두리만, 그림자 없음 ── */
+  .card {
     background: #FFFFFF;
     border: 2px solid #1A1A1A;
     border-radius: 16px;
+  }
+
+  /* 클릭 가능한 카드: 호버 시 테두리 강조 + 살짝 이동 (그림자 X) */
+  .card-hover {
+    background: #FFFFFF;
+    border: 2px solid #1A1A1A;
+    border-radius: 16px;
+    transition: transform 0.1s ease, background-color 0.1s ease;
     cursor: pointer;
-    box-shadow: 2px 2px 0px 0px #1A1A1A;
-    transition: box-shadow 0.1s ease, transform 0.1s ease;
   }
-  .neo-card:hover {
-    box-shadow: 4px 4px 0px 0px #1A1A1A;
+  .card-hover:hover {
     transform: translate(-1px, -1px);
+    background-color: #FAFAFA;
   }
-  .neo-card:active {
-    box-shadow: 0px 0px 0px 0px #1A1A1A;
-    transform: translate(2px, 2px);
+  .card-hover:active {
+    transform: translate(1px, 1px);
   }
-  .neo-card-static {
-    background: #FFFFFF;
-    border: 2px solid #1A1A1A;
-    border-radius: 16px;
-    cursor: default;
-    box-shadow: none;
-  }
+
+  /* ── 버튼: 그림자 있음 ── */
   .neo-button {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     padding: 10px 20px;
     border: 2px solid #1A1A1A;
@@ -62,24 +67,27 @@
     box-shadow: 2px 2px 0px 0px #1A1A1A;
     transition: box-shadow 0.1s ease, transform 0.1s ease;
     cursor: pointer;
+    background: #FFFFFF;
+    color: #1A1A1A;
   }
-  .neo-button:hover {
+  .neo-button:hover:not(:disabled) {
     box-shadow: 3px 3px 0px 0px #1A1A1A;
     transform: translate(-1px, -1px);
   }
-  .neo-button:active {
-    box-shadow: 0px 0px 0px 0px #1A1A1A;
+  .neo-button:active:not(:disabled) {
+    box-shadow: none;
     transform: translate(2px, 2px);
   }
   .neo-button:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
-    transform: none;
-    box-shadow: 2px 2px 0px 0px #1A1A1A;
   }
+
+  /* 노란색 강조 버튼 */
   .neo-button-primary {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     padding: 10px 20px;
     border: 2px solid #1A1A1A;
@@ -89,33 +97,24 @@
     box-shadow: 2px 2px 0px 0px #1A1A1A;
     transition: box-shadow 0.1s ease, transform 0.1s ease;
     cursor: pointer;
-    background-color: #FFD600;
+    background: #FFD600;
     color: #1A1A1A;
   }
-  .neo-button-primary:hover { box-shadow: 3px 3px 0px 0px #1A1A1A; transform: translate(-1px, -1px); }
-  .neo-button-primary:active { box-shadow: 0px 0px 0px 0px #1A1A1A; transform: translate(2px, 2px); }
-  .neo-button-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: 2px 2px 0px 0px #1A1A1A; }
-  .neo-button-secondary {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 20px;
-    border: 2px solid #1A1A1A;
-    border-radius: 9999px;
-    font-weight: 800;
-    font-size: 14px;
-    box-shadow: 2px 2px 0px 0px #1A1A1A;
-    transition: box-shadow 0.1s ease, transform 0.1s ease;
-    cursor: pointer;
-    background-color: #F0EFEC;
-    color: #1A1A1A;
+  .neo-button-primary:hover:not(:disabled) {
+    box-shadow: 3px 3px 0px 0px #1A1A1A;
+    transform: translate(-1px, -1px);
   }
-  .neo-button-secondary:hover { box-shadow: 3px 3px 0px 0px #1A1A1A; transform: translate(-1px, -1px); }
-  .neo-button-secondary:active { box-shadow: 0px 0px 0px 0px #1A1A1A; transform: translate(2px, 2px); }
-  .neo-button-secondary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: 2px 2px 0px 0px #1A1A1A; }
+  .neo-button-primary:active:not(:disabled) {
+    box-shadow: none;
+    transform: translate(2px, 2px);
+  }
+  .neo-button-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* 어두운 버튼 */
   .neo-button-dark {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     padding: 10px 20px;
     border: 2px solid #1A1A1A;
@@ -125,22 +124,74 @@
     box-shadow: 2px 2px 0px 0px #1A1A1A;
     transition: box-shadow 0.1s ease, transform 0.1s ease;
     cursor: pointer;
-    background-color: #1A1A1A;
+    background: #1A1A1A;
     color: #FFFFFF;
   }
-  .neo-button-dark:hover { box-shadow: 3px 3px 0px 0px #1A1A1A; transform: translate(-1px, -1px); }
-  .neo-button-dark:active { box-shadow: 0px 0px 0px 0px #1A1A1A; transform: translate(2px, 2px); }
-  .neo-button-dark:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: 2px 2px 0px 0px #1A1A1A; }
+  .neo-button-dark:hover:not(:disabled) {
+    box-shadow: 3px 3px 0px 0px #555;
+    transform: translate(-1px, -1px);
+  }
+  .neo-button-dark:active:not(:disabled) {
+    box-shadow: none;
+    transform: translate(2px, 2px);
+  }
+  .neo-button-dark:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* 위험 버튼 */
+  .neo-button-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border: 2px solid #dc2626;
+    border-radius: 9999px;
+    font-weight: 800;
+    font-size: 14px;
+    box-shadow: 2px 2px 0px 0px #dc2626;
+    transition: box-shadow 0.1s ease, transform 0.1s ease;
+    cursor: pointer;
+    background: #FFFFFF;
+    color: #dc2626;
+  }
+  .neo-button-danger:hover:not(:disabled) {
+    box-shadow: 3px 3px 0px 0px #dc2626;
+    transform: translate(-1px, -1px);
+  }
+  .neo-button-danger:active:not(:disabled) {
+    box-shadow: none;
+    transform: translate(2px, 2px);
+  }
+  .neo-button-danger:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── 인풋: 테두리만, 그림자 없음 ── */
+  .neo-input {
+    width: 100%;
+    padding: 10px 16px;
+    border: 2px solid #1A1A1A;
+    border-radius: 12px;
+    background: #FFFFFF;
+    color: #1A1A1A;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.1s ease;
+  }
+  .neo-input:focus { border-color: #1A1A1A; }
+  .neo-input::placeholder { color: #9CA3AF; }
+
+  /* 검색 입력창 래퍼 (인풋 + 버튼 묶음): 그림자 없음 */
   .neo-input-wrap {
     display: flex;
     align-items: center;
     border: 2px solid #1A1A1A;
     border-radius: 9999px;
     background: #FFFFFF;
-    box-shadow: 2px 2px 0px 0px #1A1A1A;
-    padding: 0 16px;
+    padding: 0 8px 0 16px;
     gap: 8px;
+    transition: border-color 0.1s ease;
   }
+  .neo-input-wrap:focus-within { border-color: #1A1A1A; }
   .neo-input-wrap input {
     flex: 1;
     background: transparent;
@@ -151,107 +202,94 @@
     padding: 10px 0;
     font-family: inherit;
   }
-  .neo-input-wrap input::placeholder {
-    color: #9CA3AF;
-  }
+  .neo-input-wrap input::placeholder { color: #9CA3AF; }
 
-  /* ── Legacy classes (kept for backward compat, updated to neo style) ── */
-  .card {
-    background: #FFFFFF;
-    border: 2px solid #1A1A1A;
-    border-radius: 16px;
-    box-shadow: none;
-  }
-  .badge {
-    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold;
-    border: 1.5px solid currentColor;
-  }
-  .btn-primary {
-    @apply inline-flex items-center gap-1.5 px-4 py-2 text-sm font-extrabold
-           transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed;
-    border: 2px solid #1A1A1A;
+  /* ── 감성 배지 ── */
+  .sentiment-pos {
+    background-color: #D1FAE5;
+    color: #065F46;
+    border: 1.5px solid #6EE7B7;
     border-radius: 9999px;
-    box-shadow: 2px 2px 0px 0px #1A1A1A;
-    background-color: #FFD600;
-    color: #1A1A1A;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+    display: inline-block;
   }
-  .btn-primary:hover:not(:disabled) { box-shadow: 3px 3px 0px 0px #1A1A1A; transform: translate(-1px, -1px); }
-  .btn-primary:active:not(:disabled) { box-shadow: 0px 0px 0px 0px #1A1A1A; transform: translate(2px, 2px); }
-  .btn-secondary {
-    @apply inline-flex items-center gap-1.5 px-4 py-2 text-sm font-extrabold
-           transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed;
-    border: 2px solid #1A1A1A;
+  .sentiment-neg {
+    background-color: #FEE2E2;
+    color: #991B1B;
+    border: 1.5px solid #FCA5A5;
     border-radius: 9999px;
-    box-shadow: 2px 2px 0px 0px #1A1A1A;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+    display: inline-block;
+  }
+  .sentiment-mixed {
+    background-color: #FEF9C3;
+    color: #854D0E;
+    border: 1.5px solid #FDE047;
+    border-radius: 9999px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+    display: inline-block;
+  }
+  .sentiment-neutral {
     background-color: #F0EFEC;
-    color: #1A1A1A;
-  }
-  .btn-secondary:hover:not(:disabled) { box-shadow: 3px 3px 0px 0px #1A1A1A; transform: translate(-1px, -1px); }
-  .btn-secondary:active:not(:disabled) { box-shadow: 0px 0px 0px 0px #1A1A1A; transform: translate(2px, 2px); }
-  .btn-danger {
-    @apply inline-flex items-center gap-1.5 px-4 py-2 text-sm font-extrabold
-           transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed;
-    border: 2px solid #1A1A1A;
+    color: #4A4A4A;
+    border: 1.5px solid #D1D5DB;
     border-radius: 9999px;
-    box-shadow: 2px 2px 0px 0px #1A1A1A;
-    background-color: #1A1A1A;
-    color: #FFFFFF;
-  }
-  .btn-danger:hover:not(:disabled) { box-shadow: 3px 3px 0px 0px #1A1A1A; transform: translate(-1px, -1px); }
-  .btn-danger:active:not(:disabled) { box-shadow: 0px 0px 0px 0px #1A1A1A; transform: translate(2px, 2px); }
-  .input {
-    @apply w-full px-4 py-2.5 text-sm;
-    border: 2px solid #1A1A1A;
-    border-radius: 12px;
-    background: #FFFFFF;
-    color: #1A1A1A;
-    font-family: inherit;
-    outline: none;
-    box-shadow: 2px 2px 0px 0px #1A1A1A;
-  }
-  .input:focus {
-    box-shadow: 3px 3px 0px 0px #1A1A1A;
-  }
-  .input::placeholder {
-    color: #9CA3AF;
-  }
-  .tab {
-    @apply px-4 py-2 text-sm font-bold transition-all;
-    border: 2px solid #1A1A1A;
-    border-radius: 9999px;
-  }
-  .tab-active {
-    @apply px-4 py-2 text-sm font-bold transition-all;
-    border: 2px solid #1A1A1A;
-    border-radius: 9999px;
-    background: #1A1A1A;
-    color: #FFFFFF;
-    box-shadow: 2px 2px 0px 0px #9CA3AF;
-  }
-  .tab-inactive {
-    @apply px-4 py-2 text-sm font-bold transition-all;
-    border: 2px solid #1A1A1A;
-    border-radius: 9999px;
-    background: #F0EFEC;
-    color: #9CA3AF;
-  }
-  .tab-inactive:hover {
-    color: #1A1A1A;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+    display: inline-block;
   }
 
-  /* ── Color utilities ── */
-  .text-positive { color: #56D0A0; }
-  .text-negative { color: #FF6B6B; }
-  .bg-positive { background-color: #56D0A0; }
-  .bg-negative { background-color: #FF6B6B; }
-  .bg-accent { background-color: #FFD600; }
+  /* ── 탭 네비게이션 ── */
+  .tab-nav {
+    display: flex;
+    border-bottom: 2px solid #1A1A1A;
+    gap: 0;
+  }
+  .tab-item {
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #9CA3AF;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.1s ease;
+  }
+  .tab-item:hover { color: #1A1A1A; }
+  .tab-item.active {
+    color: #1A1A1A;
+    font-weight: 800;
+    border-bottom-color: #1A1A1A;
+  }
 
-  /* ── Stagger animation ── */
+  /* ── 스켈레톤 로딩 ── */
+  .skeleton {
+    background-color: #F0EFEC;
+    border: 2px solid #E2E8F0;
+    border-radius: 16px;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  /* ── 애니메이션 ── */
   @keyframes slideUp {
-    from { opacity: 0; transform: translateY(16px); }
+    from { opacity: 0; transform: translateY(12px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-  .animate-slide-up {
-    animation: slideUp 0.3s ease forwards;
+  .animate-slide-up { animation: slideUp 0.25s ease forwards; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
 }

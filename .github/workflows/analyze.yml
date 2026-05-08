@@ -1,26 +1,16 @@
-name: AI 분석 (이벤트 기반)
+name: AI 분석
 
 on:
-  # 수집 완료 후 자동 연계
-  workflow_run:
-    workflows: ["리뷰 수집 (daily)"]
-    types: [completed]
-  # 관리자가 수동으로 트리거
   workflow_dispatch:
     inputs:
-      target_app_key:
-        description: "특정 앱만 분석 (비우면 전체 pending 처리)"
-        required: false
-        default: ""
+      app_key:
+        description: "분석할 앱 키 (필수)"
+        required: true
 
 jobs:
   analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # 수집이 성공한 경우에만 실행 (workflow_run 트리거 시)
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
 
     steps:
       - name: 코드 체크아웃
@@ -39,8 +29,6 @@ jobs:
         env:
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
           MASTER_SPREADSHEET_ID: ${{ secrets.MASTER_SPREADSHEET_ID }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-          GAS_WEB_APP_URL: ${{ secrets.GAS_WEB_APP_URL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          TARGET_APP_KEY: ${{ github.event.inputs.target_app_key }}
+          APP_KEY: ${{ inputs.app_key }}
         run: python -m backend.main_analyze
