@@ -53,9 +53,15 @@ export async function POST(req: NextRequest) {
       }
 
       case "approve_analysis": {
-        // pending_analysis=TRUE 앱에 대해 GitHub Actions analyze 워크플로우 트리거
         await triggerGitHubWorkflow("analyze.yml", { app_key });
-        // pending_analysis는 워크플로우 완료 후 Python이 FALSE로 변경
+        revalidateTag("all-apps");
+        return NextResponse.json({ ok: true });
+      }
+
+      case "reanalyze": {
+        // 실패/재분석: pending_analysis를 TRUE로 되돌린 뒤 워크플로우 트리거
+        await updateAppField(app_key, "pending_analysis", "TRUE");
+        await triggerGitHubWorkflow("analyze.yml", { app_key });
         revalidateTag("all-apps");
         return NextResponse.json({ ok: true });
       }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, RefreshCw, Trash2, AlertTriangle, Sparkles, Pause, Play, Download } from "lucide-react";
+import { Lock, RefreshCw, Trash2, AlertTriangle, Sparkles, Pause, Play, Download, RotateCcw } from "lucide-react";
 import type { AppMeta } from "@/lib/types";
 
 export default function AdminPage() {
@@ -328,22 +328,33 @@ export default function AdminPage() {
                       </button>
                     )}
 
-                    {/* 활성/중지 */}
+                    {/* AI 재분석 */}
+                    <button
+                      className="neo-button text-xs"
+                      disabled={isBusy}
+                      onClick={() => doAction("reanalyze", app.app_key, `'${app.app_name}' AI 재분석`)}
+                      title="분석 실패 시 재실행 — 새로운 항목으로 추가됩니다"
+                    >
+                      <RotateCcw size={12} /> AI 재분석
+                    </button>
+
+                    {/* 자동 수집 스케줄 활성/중지 */}
                     {app.status === "active" ? (
                       <button
                         className="neo-button text-xs"
                         disabled={isBusy}
-                        onClick={() => doAction("pause", app.app_key, `'${app.app_name}' 스케줄 중지`)}
+                        onClick={() => doAction("pause", app.app_key, `'${app.app_name}' 자동 수집 중지`)}
+                        title="자동 스케줄 수집에서 제외 (수동 수집은 계속 가능)"
                       >
-                        <Pause size={12} /> 스케줄 중지
+                        <Pause size={12} /> 자동 수집 중지
                       </button>
                     ) : (
                       <button
                         className="neo-button text-xs"
                         disabled={isBusy}
-                        onClick={() => doAction("activate", app.app_key, `'${app.app_name}' 활성화`)}
+                        onClick={() => doAction("activate", app.app_key, `'${app.app_name}' 자동 수집 재개`)}
                       >
-                        <Play size={12} /> 활성화
+                        <Play size={12} /> 자동 수집 재개
                       </button>
                     )}
 
