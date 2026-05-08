@@ -4,7 +4,7 @@ import type { Analysis } from "@/lib/types";
 
 export async function GET() {
   try {
-    const apps = (await getAllApps()).filter((a) => a.status === "active");
+    const apps = await getAllApps();
 
     const enriched = await Promise.all(
       apps.map(async (app) => {

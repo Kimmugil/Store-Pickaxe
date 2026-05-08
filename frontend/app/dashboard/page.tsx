@@ -6,10 +6,9 @@ export const revalidate = 60;
 
 export default async function DashboardPage() {
   const apps = await getAllApps();
-  const activeApps = apps.filter((a) => a.status === "active");
 
   const appData = await Promise.all(
-    activeApps.map(async (app) => {
+    apps.map(async (app) => {
       if (!app.spreadsheet_id) return { app, latestAnalysis: null, logs: [] };
       const [analyses, logs] = await Promise.all([
         getAppAnalyses(app.spreadsheet_id).catch(() => [] as Analysis[]),
@@ -30,7 +29,7 @@ export default async function DashboardPage() {
               className="px-2 py-0.5 rounded-xl text-2xl"
               style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
             >
-              {activeApps.length}
+              {apps.length}
             </span>
           </h1>
           <p className="mt-1 text-sm font-medium" style={{ color: "#9CA3AF" }}>

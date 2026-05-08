@@ -62,17 +62,8 @@ def _weighted_sample(reviews: list[dict], target: int) -> list[dict]:
 def sample_for_analysis(
     google_reviews: list[dict],
     apple_reviews: list[dict],
-    since_date: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
-    """
-    분석용 샘플 추출.
-    since_date: ISO 날짜 문자열. 지정 시 해당 날짜 이후 리뷰만 사용.
-    Returns: (google_sample, apple_sample)
-    """
-    if since_date:
-        google_reviews = [r for r in google_reviews if r.get("reviewed_at", "") >= since_date]
-        apple_reviews = [r for r in apple_reviews if r.get("reviewed_at", "") >= since_date]
-
+    """전체 수집 리뷰에서 평점 분포 균형 샘플 추출."""
     google_reviews = _filter_reviews(google_reviews)
     apple_reviews = _filter_reviews(apple_reviews)
 

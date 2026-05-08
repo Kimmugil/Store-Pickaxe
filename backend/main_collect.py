@@ -135,9 +135,6 @@ def main():
         log.error(f"앱을 찾을 수 없습니다: {app_key}")
         sys.exit(1)
 
-    if app.get("status") not in ("active", "paused"):
-        log.warning(f"[{app_key}] status={app.get('status')} — 수집 진행")
-
     process_app(app, mode)
 
 

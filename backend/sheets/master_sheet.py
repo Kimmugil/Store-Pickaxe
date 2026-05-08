@@ -21,7 +21,7 @@ MASTER_HEADERS = [
     "google_package", "apple_app_id", "icon_url",
     "google_rating", "apple_rating",
     "google_review_count", "apple_review_count",
-    "status",           # active | paused
+    "status",           # 레거시 컬럼 — 시트 열 순서 유지용, 코드에서 미사용
     "spreadsheet_id",
     "registered_at", "last_collected_at", "last_analyzed_at",
     "pending_analysis", # TRUE | FALSE
@@ -67,10 +67,6 @@ def get_all_apps() -> list[dict]:
                   for i in range(len(headers))}
         result.append(record)
     return result
-
-
-def get_active_apps() -> list[dict]:
-    return [a for a in get_all_apps() if a.get("status") == "active"]
 
 
 def get_app(app_key: str) -> Optional[dict]:

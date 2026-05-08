@@ -3,12 +3,12 @@
 
 환경변수:
   APP_KEY   분석할 앱 키 (필수)
+  FORCE     true이면 pending_analysis 체크 없이 강제 실행 (재분석 용도)
 
 동작:
-  1. pending_analysis=TRUE 인지 확인
-  2. 마지막 분석 이후 신규 리뷰 샘플링 (첫 분석이면 전체)
-  3. Gemini 호출 → 결과 저장
-  4. pending_analysis=FALSE 로 변경
+  1. 전체 수집 리뷰에서 평점 분포 균형 샘플링
+  2. Gemini 호출 → 결과 저장 (새 UUID로 추가, 기존 분석 이력 유지)
+  3. pending_analysis=FALSE 로 변경
 """
 import os
 import sys
@@ -39,22 +39,10 @@ def process_app(app: dict) -> None:
 
     log.info(f"[{app_key}] 분석 시작")
 
-    # ── 마지막 분석 이후 신규 리뷰만 대상 ───────────────────────────
-    latest = asheet.get_latest_analysis(ss_id)
-
-    if latest:
-        since_date = latest.get("created_at", "")[:10]
-        mode = "update"
-        review_scope = f"{since_date} 이후 신규 리뷰"
-    else:
-        since_date = None
-        mode = "onboarding"
-        review_scope = "전체 수집 리뷰"
-
     google_reviews = asheet.get_google_reviews(ss_id)
     apple_reviews = asheet.get_apple_reviews(ss_id)
 
-    g_sample, a_sample = sampler.sample_for_analysis(google_reviews, apple_reviews, since_date)
+    g_sample, a_sample = sampler.sample_for_analysis(google_reviews, apple_reviews)
 
     total_sample = len(g_sample) + len(a_sample)
     min_reviews = cfg.min_reviews_for_ai()
@@ -64,12 +52,10 @@ def process_app(app: dict) -> None:
         master.set_pending_analysis(app_key, False)
         return
 
-    log.info(f"[{app_key}] 샘플: Google {len(g_sample)}개 + Apple {len(a_sample)}개 ({review_scope})")
+    log.info(f"[{app_key}] 샘플: Google {len(g_sample)}개 + Apple {len(a_sample)}개")
 
-    # ── Gemini 분석 ──────────────────────────────────────────────
-    result = gemini.analyze(g_sample, a_sample, mode=mode, review_scope=review_scope)
+    result = gemini.analyze(g_sample, a_sample, mode="onboarding", review_scope="전체 수집 리뷰")
 
-    # ── 결과 저장 ────────────────────────────────────────────────
     analysis_id = asheet.save_analysis(ss_id, result)
     log.info(f"[{app_key}] 분석 저장: {analysis_id}")
 
@@ -95,52 +81,10 @@ def main():
         sys.exit(1)
 
     if not force and app.get("pending_analysis", "").upper() != "TRUE":
-        log.info(f"[{app_key}] pending_analysis=FALSE — 건너뜀")
+        log.info(f"[{app_key}] pending_analysis=FALSE — 건너뜀 (재분석하려면 관리자 패널 'AI 재분석' 버튼 사용)")
         return
 
-    if force:
-        log.info(f"[{app_key}] FORCE 모드 — 전체 리뷰 기반으로 재분석")
-        _force_process_app(app)
-    else:
-        process_app(app)
-
-
-def _force_process_app(app: dict) -> None:
-    """pending_analysis 무관하게 전체 리뷰 기반으로 분석 (재분석 용도)."""
-    app_key = app["app_key"]
-    ss_id = app.get("spreadsheet_id", "")
-
-    if not ss_id:
-        log.error(f"[{app_key}] spreadsheet_id 없음")
-        return
-
-    log.info(f"[{app_key}] 분석 시작 (force)")
-
-    google_reviews = asheet.get_google_reviews(ss_id)
-    apple_reviews = asheet.get_apple_reviews(ss_id)
-
-    g_sample, a_sample = sampler.sample_for_analysis(google_reviews, apple_reviews, since_date=None)
-
-    total_sample = len(g_sample) + len(a_sample)
-    min_reviews = cfg.min_reviews_for_ai()
-
-    if total_sample < min_reviews:
-        log.warning(f"[{app_key}] 샘플 부족 ({total_sample}개 < {min_reviews}개) — 건너뜀")
-        return
-
-    log.info(f"[{app_key}] 샘플: Google {len(g_sample)}개 + Apple {len(a_sample)}개 (전체 기반 재분석)")
-
-    result = gemini.analyze(g_sample, a_sample, mode="onboarding", review_scope="전체 수집 리뷰 (재분석)")
-
-    analysis_id = asheet.save_analysis(ss_id, result)
-    log.info(f"[{app_key}] 분석 저장: {analysis_id}")
-
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    master.update_app(app_key, {
-        "last_analyzed_at": now,
-        "pending_analysis": "FALSE",
-    })
-    log.info(f"[{app_key}] 완료")
+    process_app(app)
 
 
 if __name__ == "__main__":
