@@ -43,6 +43,17 @@ export default function AppDetailPage() {
   const { meta, logs, analyses } = data;
   const sortedAnalyses = [...analyses].sort((a, b) => (b.created_at > a.created_at ? 1 : -1));
 
+  function computeAvgFromDist(dist: Record<string, number> | undefined): number | null {
+    if (!dist) return null;
+    const entries = Object.entries(dist);
+    if (entries.length === 0) return null;
+    let total = 0, count = 0;
+    for (const [star, cnt] of entries) { total += Number(star) * cnt; count += cnt; }
+    return count > 0 ? Math.round(total / count * 10) / 10 : null;
+  }
+  const gCollected = computeAvgFromDist(sortedAnalyses[0]?.google_rating_dist);
+  const aCollected = computeAvgFromDist(sortedAnalyses[0]?.apple_rating_dist);
+
   return (
     <div className="space-y-6">
       {/* 뒤로 가기 */}
@@ -87,16 +98,45 @@ export default function AppDetailPage() {
             </div>
             <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>{meta.developer}</p>
             <div className="flex items-center gap-4 mt-3 flex-wrap">
-              {meta.google_rating && (
-                <span className="text-sm font-bold" style={{ color: "#4285F4" }}>
-                  Google ★{Number(meta.google_rating).toFixed(1)}
-                </span>
+              {(meta.google_rating || gCollected) && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-black" style={{ color: "#4285F4" }}>Google</span>
+                  {meta.google_rating && (
+                    <span className="text-sm font-bold" style={{ color: "#4285F4" }}>
+                      공식 ★{Number(meta.google_rating).toFixed(1)}
+                    </span>
+                  )}
+                  {gCollected !== null && (
+                    <span className="text-sm" style={{ color: "#9CA3AF" }}>
+                      수집 ★{gCollected.toFixed(1)}
+                    </span>
+                  )}
+                </div>
               )}
-              {meta.apple_rating && (
-                <span className="text-sm font-bold" style={{ color: "#1A1A1A" }}>
-                  Apple ★{Number(meta.apple_rating).toFixed(1)}
-                </span>
+              {(meta.apple_rating || aCollected) && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-black" style={{ color: "#1A1A1A" }}>Apple</span>
+                  {meta.apple_rating && (
+                    <span className="text-sm font-bold" style={{ color: "#1A1A1A" }}>
+                      공식 ★{Number(meta.apple_rating).toFixed(1)}
+                    </span>
+                  )}
+                  {aCollected !== null && (
+                    <span className="text-sm" style={{ color: "#9CA3AF" }}>
+                      수집 ★{aCollected.toFixed(1)}
+                    </span>
+                  )}
+                </div>
               )}
+              <span
+                title="공식 평점: 스토어 자체 알고리즘 기반 (최근 리뷰 가중, 앱 업데이트 시 초기화 가능)&#10;수집 평점: Store Pickaxe가 수집한 전체 리뷰의 단순 산술 평균"
+                style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: 16, height: 16, borderRadius: "50%",
+                  background: "#E2E8F0", color: "#9CA3AF", fontSize: 10, fontWeight: "bold",
+                  cursor: "help", flexShrink: 0,
+                }}
+              >?</span>
               {(meta.google_review_count ?? 0) > 0 && (
                 <span className="text-xs" style={{ color: "#9CA3AF" }}>
                   수집 Google {(meta.google_review_count ?? 0).toLocaleString()} · Apple {(meta.apple_review_count ?? 0).toLocaleString()}

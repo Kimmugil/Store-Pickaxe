@@ -66,6 +66,15 @@ export default async function DashboardPage() {
   );
 }
 
+function computeAvgFromDist(dist: Record<string, number> | undefined): number | null {
+  if (!dist) return null;
+  const entries = Object.entries(dist);
+  if (entries.length === 0) return null;
+  let total = 0, count = 0;
+  for (const [star, cnt] of entries) { total += Number(star) * cnt; count += cnt; }
+  return count > 0 ? Math.round(total / count * 10) / 10 : null;
+}
+
 function AppCard({
   app, latestAnalysis, logs,
 }: {
@@ -76,12 +85,8 @@ function AppCard({
   const totalReviews = (app.google_review_count ?? 0) + (app.apple_review_count ?? 0);
   const lastLog = logs.at(-1);
 
-  const googleSentiment = latestAnalysis?.google_sentiment ?? null;
-  const appleSentiment = latestAnalysis?.apple_sentiment ?? null;
-  const avgSentiment =
-    googleSentiment !== null && appleSentiment !== null
-      ? Math.round((googleSentiment + appleSentiment) / 2)
-      : googleSentiment ?? appleSentiment;
+  const gCollected = computeAvgFromDist(latestAnalysis?.google_rating_dist);
+  const aCollected = computeAvgFromDist(latestAnalysis?.apple_rating_dist);
 
   return (
     <Link href={`/${app.app_key}`} className="block card-hover p-0 overflow-hidden">
@@ -114,17 +119,48 @@ function AppCard({
             )}
           </div>
           <p className="text-sm mt-0.5 truncate" style={{ color: "#9CA3AF" }}>{app.developer}</p>
-          <div className="flex items-center gap-3 mt-2">
-            {app.google_rating && (
-              <span className="text-xs font-bold" style={{ color: "#4285F4" }}>
-                G ★{Number(app.google_rating).toFixed(1)}
-              </span>
+
+          {/* 이중 평점: 공식 스토어 + 수집 평균 */}
+          <div className="flex items-start gap-3 mt-2 flex-wrap">
+            {(app.google_rating || gCollected) && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-black" style={{ color: "#4285F4" }}>G</span>
+                {app.google_rating && (
+                  <span className="text-xs font-bold" style={{ color: "#4285F4" }}>
+                    공식 ★{Number(app.google_rating).toFixed(1)}
+                  </span>
+                )}
+                {gCollected !== null && (
+                  <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                    수집 ★{gCollected.toFixed(1)}
+                  </span>
+                )}
+              </div>
             )}
-            {app.apple_rating && (
-              <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
-                A ★{Number(app.apple_rating).toFixed(1)}
-              </span>
+            {(app.apple_rating || aCollected) && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-black" style={{ color: "#1A1A1A" }}>A</span>
+                {app.apple_rating && (
+                  <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
+                    공식 ★{Number(app.apple_rating).toFixed(1)}
+                  </span>
+                )}
+                {aCollected !== null && (
+                  <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                    수집 ★{aCollected.toFixed(1)}
+                  </span>
+                )}
+              </div>
             )}
+            <span
+              title="공식 평점: 스토어 자체 알고리즘 기반 (최근 리뷰 가중, 앱 업데이트 시 초기화 가능)&#10;수집 평점: Store Pickaxe가 수집한 전체 리뷰의 단순 산술 평균"
+              style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                width: 14, height: 14, borderRadius: "50%",
+                background: "#E2E8F0", color: "#9CA3AF", fontSize: 9, fontWeight: "bold",
+                cursor: "help", flexShrink: 0,
+              }}
+            >?</span>
           </div>
         </div>
       </div>
@@ -142,17 +178,12 @@ function AppCard({
       </div>
 
       <div
-        className="flex items-center justify-between px-5 py-3"
+        className="flex items-center px-5 py-3"
         style={{ borderTop: "1px solid #E2E8F0", background: "#FAFAFA" }}
       >
         <span className="text-xs font-bold" style={{ color: "#9CA3AF" }}>
           리뷰 {totalReviews.toLocaleString()}건
         </span>
-        {avgSentiment !== null && (
-          <span className={avgSentiment >= 60 ? "sentiment-pos" : avgSentiment >= 40 ? "sentiment-mixed" : "sentiment-neg"}>
-            긍정도 {avgSentiment}%
-          </span>
-        )}
       </div>
     </Link>
   );

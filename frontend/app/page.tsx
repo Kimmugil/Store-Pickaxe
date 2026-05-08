@@ -366,12 +366,24 @@ export default function HomePage() {
 
 // ── 카로셀 카드 ───────────────────────────────────────────────────
 
+function computeAvgFromDist(dist: Record<string, number> | undefined): number | null {
+  if (!dist) return null;
+  const entries = Object.entries(dist);
+  if (entries.length === 0) return null;
+  let total = 0, count = 0;
+  for (const [star, cnt] of entries) { total += Number(star) * cnt; count += cnt; }
+  return count > 0 ? Math.round(total / count * 10) / 10 : null;
+}
+
 function RecentCard({ app, analysis }: { app: AppMeta; analysis: Analysis | null }) {
+  const gCollected = computeAvgFromDist(analysis?.google_rating_dist);
+  const aCollected = computeAvgFromDist(analysis?.apple_rating_dist);
+
   return (
     <Link
       href={`/${app.app_key}`}
       className="flex-shrink-0 card-hover overflow-hidden"
-      style={{ width: 260 }}
+      style={{ width: 300 }}
     >
       {/* 헤더 */}
       <div className="p-4" style={{ borderBottom: "2px solid #1A1A1A" }}>
@@ -397,14 +409,14 @@ function RecentCard({ app, analysis }: { app: AppMeta; analysis: Analysis | null
       </div>
 
       {/* 요약 */}
-      <div className="px-4 py-3" style={{ minHeight: 72 }}>
+      <div className="px-4 py-3" style={{ minHeight: 90 }}>
         {analysis?.overall_summary ? (
           <p
             className="text-xs leading-relaxed"
             style={{
               color: "#4A4A4A",
               display: "-webkit-box",
-              WebkitLineClamp: 3,
+              WebkitLineClamp: 4,
               WebkitBoxOrient: "vertical",
               overflow: "hidden",
             }}
@@ -420,20 +432,49 @@ function RecentCard({ app, analysis }: { app: AppMeta; analysis: Analysis | null
 
       {/* 하단 */}
       <div
-        className="flex items-center justify-between px-4 py-2"
+        className="px-4 py-3 space-y-1"
         style={{ borderTop: "2px solid #1A1A1A", background: "#FAFAFA" }}
       >
-        <div className="flex gap-2">
-          {app.google_rating && (
-            <span className="text-xs font-bold" style={{ color: "#4285F4" }}>
-              G ★{Number(app.google_rating).toFixed(1)}
-            </span>
+        <div className="flex items-center gap-3 flex-wrap">
+          {(app.google_rating || gCollected) && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-black" style={{ color: "#4285F4" }}>G</span>
+              {app.google_rating && (
+                <span className="text-xs font-bold" style={{ color: "#4285F4" }}>
+                  공식 ★{Number(app.google_rating).toFixed(1)}
+                </span>
+              )}
+              {gCollected !== null && (
+                <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                  수집 ★{gCollected.toFixed(1)}
+                </span>
+              )}
+            </div>
           )}
-          {app.apple_rating && (
-            <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
-              A ★{Number(app.apple_rating).toFixed(1)}
-            </span>
+          {(app.apple_rating || aCollected) && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-black" style={{ color: "#1A1A1A" }}>A</span>
+              {app.apple_rating && (
+                <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
+                  공식 ★{Number(app.apple_rating).toFixed(1)}
+                </span>
+              )}
+              {aCollected !== null && (
+                <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                  수집 ★{aCollected.toFixed(1)}
+                </span>
+              )}
+            </div>
           )}
+          <span
+            title="공식 평점: 스토어 자체 알고리즘 기반 (최근 리뷰 가중, 앱 업데이트 시 초기화 가능)&#10;수집 평점: Store Pickaxe가 수집한 전체 리뷰의 단순 산술 평균"
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 14, height: 14, borderRadius: "50%",
+              background: "#E2E8F0", color: "#9CA3AF", fontSize: 9, fontWeight: "bold",
+              cursor: "help", flexShrink: 0,
+            }}
+          >?</span>
         </div>
         {analysis?.created_at && (
           <span className="text-xs" style={{ color: "#9CA3AF" }}>
