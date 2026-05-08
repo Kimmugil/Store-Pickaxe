@@ -60,6 +60,16 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      case "collect": {
+        await triggerGitHubWorkflow("collect.yml", { app_key, mode: "update" });
+        return NextResponse.json({ ok: true });
+      }
+
+      case "collect_full": {
+        await triggerGitHubWorkflow("collect.yml", { app_key, mode: "onboarding" });
+        return NextResponse.json({ ok: true });
+      }
+
       case "pause": {
         await updateAppField(app_key, "status", "paused");
         revalidateTag("all-apps");

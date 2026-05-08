@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, RefreshCw, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import type { AppMeta, CollectionLog, Analysis } from "@/lib/types";
 
 interface AppDetailData {
@@ -18,8 +18,6 @@ export default function AppDetailPage() {
 
   const [data, setData] = useState<AppDetailData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [collecting, setCollecting] = useState(false);
-  const [collectMsg, setCollectMsg] = useState("");
 
   async function loadData() {
     setLoading(true);
@@ -33,28 +31,6 @@ export default function AppDetailPage() {
 
   useEffect(() => { loadData(); }, [appKey]);
 
-  async function handleCollect(mode: "onboarding" | "update") {
-    setCollecting(true);
-    setCollectMsg("");
-    try {
-      const res = await fetch("/api/collect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ app_key: appKey, mode }),
-      });
-      const json = await res.json();
-      if (res.ok) {
-        setCollectMsg("✓ 수집 워크플로우를 시작했습니다. 완료까지 수 분 소요됩니다.");
-      } else {
-        setCollectMsg("✗ " + (json.error || "수집 실패"));
-      }
-    } catch {
-      setCollectMsg("✗ 네트워크 오류");
-    } finally {
-      setCollecting(false);
-    }
-  }
-
   if (loading) return <SkeletonDetail />;
   if (!data) return (
     <div className="text-center py-20">
@@ -65,7 +41,6 @@ export default function AppDetailPage() {
 
   const { meta, logs, analyses } = data;
   const sortedAnalyses = [...analyses].sort((a, b) => (b.created_at > a.created_at ? 1 : -1));
-  const hasReviews = (meta.google_review_count ?? 0) + (meta.apple_review_count ?? 0) > 0;
 
   return (
     <div className="space-y-6">
@@ -131,78 +106,39 @@ export default function AppDetailPage() {
         </div>
       </div>
 
-      {/* 수집 섹션 */}
-      <div className="card p-6 space-y-4">
-        <h2 className="font-black text-base" style={{ color: "#1A1A1A" }}>리뷰 수집</h2>
-        <div className="flex gap-3 flex-wrap">
-          <button
-            className="neo-button-primary"
-            onClick={() => handleCollect(hasReviews ? "update" : "onboarding")}
-            disabled={collecting}
-          >
-            <RefreshCw size={14} className={collecting ? "animate-spin" : ""} />
-            {collecting ? "수집 중..." : hasReviews ? "신규 리뷰 수집" : "전체 수집 (첫 실행)"}
-          </button>
-          {hasReviews && (
-            <button
-              className="neo-button"
-              onClick={() => handleCollect("onboarding")}
-              disabled={collecting}
-            >
-              전체 재수집
-            </button>
-          )}
-        </div>
-
-        {collectMsg && (
-          <p
-            className="text-sm font-bold px-4 py-2 rounded-xl"
-            style={{
-              background: collectMsg.startsWith("✓") ? "#D1FAE5" : "#FEE2E2",
-              border: `1.5px solid ${collectMsg.startsWith("✓") ? "#6EE7B7" : "#FCA5A5"}`,
-              color: collectMsg.startsWith("✓") ? "#065F46" : "#991B1B",
-            }}
-          >
-            {collectMsg}
-          </p>
-        )}
-
-        {/* 수집 이력 */}
-        {logs.length > 0 && (
-          <div className="space-y-2 pt-2">
-            <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#9CA3AF" }}>
-              수집 이력
-            </p>
-            <div className="space-y-2">
-              {[...logs].reverse().slice(0, 5).map((log, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between px-4 py-2 rounded-xl text-sm"
-                  style={{ background: "#F0EFEC", border: "1.5px solid #E2E8F0" }}
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="text-xs font-black px-2 py-0.5 rounded-full"
-                      style={{
-                        background: log.mode === "onboarding" ? "#1A1A1A" : "#E2E8F0",
-                        color: log.mode === "onboarding" ? "#FFFFFF" : "#4A4A4A",
-                      }}
-                    >
-                      {log.mode === "onboarding" ? "전체" : "신규"}
-                    </span>
-                    <span style={{ color: "#4A4A4A" }}>
-                      Google +{log.google_added} · Apple +{log.apple_added}
-                    </span>
-                  </div>
-                  <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                    {formatDate(log.collected_at)}
+      {/* 수집 이력 */}
+      {logs.length > 0 && (
+        <div className="card p-6 space-y-4">
+          <h2 className="font-black text-base" style={{ color: "#1A1A1A" }}>수집 이력</h2>
+          <div className="space-y-2">
+            {[...logs].reverse().slice(0, 5).map((log, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between px-4 py-2 rounded-xl text-sm"
+                style={{ background: "#F0EFEC", border: "1.5px solid #E2E8F0" }}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className="text-xs font-black px-2 py-0.5 rounded-full"
+                    style={{
+                      background: log.mode === "onboarding" ? "#1A1A1A" : "#E2E8F0",
+                      color: log.mode === "onboarding" ? "#FFFFFF" : "#4A4A4A",
+                    }}
+                  >
+                    {log.mode === "onboarding" ? "전체" : "신규"}
+                  </span>
+                  <span style={{ color: "#4A4A4A" }}>
+                    Google +{log.google_added} · Apple +{log.apple_added}
                   </span>
                 </div>
-              ))}
-            </div>
+                <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                  {formatDate(log.collected_at)}
+                </span>
+              </div>
+            ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 분석 리포트 목록 */}
       <div className="card p-6 space-y-4">
@@ -223,7 +159,7 @@ export default function AppDetailPage() {
             <p className="text-sm" style={{ color: "#9CA3AF" }}>
               {meta.pending_analysis
                 ? "분석 승인 대기중입니다"
-                : hasReviews
+                : (meta.google_review_count ?? 0) + (meta.apple_review_count ?? 0) > 0
                 ? "리뷰가 수집되었습니다 — 관리자가 분석을 승인하면 결과가 표시됩니다"
                 : "아직 수집된 리뷰가 없습니다"}
             </p>

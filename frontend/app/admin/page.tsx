@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, RefreshCw, Trash2, AlertTriangle, Sparkles, Pause, Play } from "lucide-react";
+import { Lock, RefreshCw, Trash2, AlertTriangle, Sparkles, Pause, Play, Download } from "lucide-react";
 import type { AppMeta } from "@/lib/types";
 
 export default function AdminPage() {
@@ -303,13 +303,39 @@ export default function AdminPage() {
                     className="flex items-center gap-2 flex-wrap pt-3"
                     style={{ borderTop: "1.5px solid #E2E8F0" }}
                   >
+                    {/* 수집 버튼 */}
+                    <button
+                      className="neo-button text-xs"
+                      disabled={isBusy}
+                      onClick={() => doAction(
+                        "collect",
+                        app.app_key,
+                        `'${app.app_name}' 수집 시작`,
+                      )}
+                      title={(app.google_review_count ?? 0) + (app.apple_review_count ?? 0) > 0 ? "신규 리뷰만 수집" : "전체 수집 (첫 실행)"}
+                    >
+                      <Download size={12} />
+                      {(app.google_review_count ?? 0) + (app.apple_review_count ?? 0) > 0 ? "신규 수집" : "전체 수집"}
+                    </button>
+                    {(app.google_review_count ?? 0) + (app.apple_review_count ?? 0) > 0 && (
+                      <button
+                        className="neo-button text-xs"
+                        disabled={isBusy}
+                        onClick={() => doAction("collect_full", app.app_key, `'${app.app_name}' 전체 재수집`)}
+                        title="전체 재수집"
+                      >
+                        <RefreshCw size={12} /> 전체 재수집
+                      </button>
+                    )}
+
+                    {/* 활성/중지 */}
                     {app.status === "active" ? (
                       <button
                         className="neo-button text-xs"
                         disabled={isBusy}
-                        onClick={() => doAction("pause", app.app_key, `'${app.app_name}' 수집 중지`)}
+                        onClick={() => doAction("pause", app.app_key, `'${app.app_name}' 스케줄 중지`)}
                       >
-                        <Pause size={12} /> 수집 중지
+                        <Pause size={12} /> 스케줄 중지
                       </button>
                     ) : (
                       <button

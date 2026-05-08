@@ -106,7 +106,7 @@ def _call_gemini(prompt: str) -> str:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.3,
-                    max_output_tokens=1024,
+                    max_output_tokens=4096,
                 ),
             )
             return response.text or ""
