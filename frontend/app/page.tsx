@@ -154,7 +154,15 @@ export default function HomePage() {
               전체 보기 <ChevronRight size={12} />
             </Link>
           </div>
-          <div style={{ overflow: "hidden" }}>
+          <div style={{
+            position: "relative",
+            left: "50%",
+            right: "50%",
+            marginLeft: "-50vw",
+            marginRight: "-50vw",
+            width: "100vw",
+            overflow: "hidden",
+          }}>
             <style>{`
               @keyframes marquee {
                 from { transform: translateX(0); }
@@ -164,6 +172,7 @@ export default function HomePage() {
                 display: flex;
                 gap: 16px;
                 width: max-content;
+                padding: 4px 16px;
                 animation: marquee 30s linear infinite;
               }
               .marquee-track:hover { animation-play-state: paused; }
