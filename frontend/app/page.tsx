@@ -154,13 +154,25 @@ export default function HomePage() {
               전체 보기 <ChevronRight size={12} />
             </Link>
           </div>
-          <div
-            className="flex gap-4 overflow-x-auto pb-4"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-          >
-            {recentApps.map(({ app, latestAnalysis }) => (
-              <RecentCard key={app.app_key} app={app} analysis={latestAnalysis} />
-            ))}
+          <div style={{ overflow: "hidden" }}>
+            <style>{`
+              @keyframes marquee {
+                from { transform: translateX(0); }
+                to   { transform: translateX(-50%); }
+              }
+              .marquee-track {
+                display: flex;
+                gap: 16px;
+                width: max-content;
+                animation: marquee 30s linear infinite;
+              }
+              .marquee-track:hover { animation-play-state: paused; }
+            `}</style>
+            <div className="marquee-track">
+              {[...recentApps, ...recentApps].map(({ app, latestAnalysis }, i) => (
+                <RecentCard key={`${app.app_key}-${i}`} app={app} analysis={latestAnalysis} />
+              ))}
+            </div>
           </div>
         </div>
       )}
