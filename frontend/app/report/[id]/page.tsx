@@ -780,8 +780,6 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
   }
 
   const W = 520, H = 220, PAD_L = 36, PAD_R = 16, PAD_T = 24, PAD_B = 36;
-  const BAR_H = 40;
-  const TOTAL_H = H + BAR_H + 6;
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
 
@@ -836,10 +834,12 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
     ? Math.max(3, (innerW / (points.length - 1)) * 0.5)
     : 8;
 
+  const chartBottom = PAD_T + innerH; // 볼륨 바 기준선 (= ★1 라인)
+
   return (
     <div>
       <svg
-        viewBox={`0 0 ${W} ${TOTAL_H}`}
+        viewBox={`0 0 ${W} ${H}`}
         style={{ width: "100%", height: "auto", display: "block" }}
         onMouseLeave={() => setHoveredIdx(null)}
       >
@@ -848,6 +848,23 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
           <rect key={i} x={zone.x1} y={PAD_T} width={zone.x2 - zone.x1} height={innerH}
             fill={zone.fill} opacity={0.7} />
         ))}
+
+        {/* 볼륨 바 — 차트 영역 내부, 격자선 아래 레이어 */}
+        {points.map((p, i) => {
+          const barHeight = Math.max(1, (p.count / maxCount) * innerH);
+          return (
+            <rect
+              key={i}
+              x={p.x - barW / 2}
+              y={chartBottom - barHeight}
+              width={barW}
+              height={barHeight}
+              fill="#4285F4"
+              opacity={0.15}
+              rx={1}
+            />
+          );
+        })}
 
         {/* Y축 격자 + 레이블 */}
         {[1, 2, 3, 4, 5].map((rating) => {
@@ -881,26 +898,6 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
             {points[i].month.slice(2)}
           </text>
         ))}
-
-        {/* 볼륨 바 레이블 */}
-        <text x={PAD_L} y={H + 12} fill="#C4C4C4" fontSize={8}>리뷰 볼륨</text>
-
-        {/* 볼륨 바 */}
-        {points.map((p, i) => {
-          const barHeight = Math.max(1, (p.count / maxCount) * (BAR_H - 4));
-          return (
-            <rect
-              key={i}
-              x={p.x - barW / 2}
-              y={TOTAL_H - barHeight}
-              width={barW}
-              height={barHeight}
-              fill="#4285F4"
-              opacity={0.22}
-              rx={1}
-            />
-          );
-        })}
 
         {/* 툴팁 */}
         {hp !== null && (() => {
