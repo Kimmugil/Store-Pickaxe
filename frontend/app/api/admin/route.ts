@@ -59,10 +59,8 @@ export async function POST(req: NextRequest) {
       }
 
       case "reanalyze": {
-        // 실패/재분석: pending_analysis를 TRUE로 되돌린 뒤 워크플로우 트리거
-        await updateAppField(app_key, "pending_analysis", "TRUE");
-        await triggerGitHubWorkflow("analyze.yml", { app_key });
-        revalidateTag("all-apps");
+        // pending_analysis 건드리지 않고 force=true로 전체 기반 재분석
+        await triggerGitHubWorkflow("analyze.yml", { app_key, force: "true" });
         return NextResponse.json({ ok: true });
       }
 

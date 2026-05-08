@@ -87,16 +87,60 @@ def main():
         log.error("APP_KEY 환경변수가 필요합니다.")
         sys.exit(1)
 
+    force = os.getenv("FORCE", "false").strip().lower() == "true"
+
     app = master.get_app(app_key)
     if not app:
         log.error(f"앱을 찾을 수 없습니다: {app_key}")
         sys.exit(1)
 
-    if app.get("pending_analysis", "").upper() != "TRUE":
+    if not force and app.get("pending_analysis", "").upper() != "TRUE":
         log.info(f"[{app_key}] pending_analysis=FALSE — 건너뜀")
         return
 
-    process_app(app)
+    if force:
+        log.info(f"[{app_key}] FORCE 모드 — 전체 리뷰 기반으로 재분석")
+        _force_process_app(app)
+    else:
+        process_app(app)
+
+
+def _force_process_app(app: dict) -> None:
+    """pending_analysis 무관하게 전체 리뷰 기반으로 분석 (재분석 용도)."""
+    app_key = app["app_key"]
+    ss_id = app.get("spreadsheet_id", "")
+
+    if not ss_id:
+        log.error(f"[{app_key}] spreadsheet_id 없음")
+        return
+
+    log.info(f"[{app_key}] 분석 시작 (force)")
+
+    google_reviews = asheet.get_google_reviews(ss_id)
+    apple_reviews = asheet.get_apple_reviews(ss_id)
+
+    g_sample, a_sample = sampler.sample_for_analysis(google_reviews, apple_reviews, since_date=None)
+
+    total_sample = len(g_sample) + len(a_sample)
+    min_reviews = cfg.min_reviews_for_ai()
+
+    if total_sample < min_reviews:
+        log.warning(f"[{app_key}] 샘플 부족 ({total_sample}개 < {min_reviews}개) — 건너뜀")
+        return
+
+    log.info(f"[{app_key}] 샘플: Google {len(g_sample)}개 + Apple {len(a_sample)}개 (전체 기반 재분석)")
+
+    result = gemini.analyze(g_sample, a_sample, mode="onboarding", review_scope="전체 수집 리뷰 (재분석)")
+
+    analysis_id = asheet.save_analysis(ss_id, result)
+    log.info(f"[{app_key}] 분석 저장: {analysis_id}")
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    master.update_app(app_key, {
+        "last_analyzed_at": now,
+        "pending_analysis": "FALSE",
+    })
+    log.info(f"[{app_key}] 완료")
 
 
 if __name__ == "__main__":

@@ -6,6 +6,10 @@ on:
       app_key:
         description: "분석할 앱 키 (필수)"
         required: true
+      force:
+        description: "true이면 pending_analysis 체크 생략 + 전체 리뷰 기반 분석"
+        required: false
+        default: "false"
 
 jobs:
   analyze:
@@ -31,4 +35,5 @@ jobs:
           MASTER_SPREADSHEET_ID: ${{ secrets.MASTER_SPREADSHEET_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           APP_KEY: ${{ inputs.app_key }}
+          FORCE: ${{ inputs.force }}
         run: python -m backend.main_analyze
