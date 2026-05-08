@@ -75,18 +75,27 @@ def analyze(
     else:
         result["platform_diff"] = ""
 
-    # 시기별 결과에 count/date/sentiment 메타데이터 병합
+    # 시기별 결과에 count/date/sentiment/avg_rating/keywords 메타데이터 병합
     for phase_key in ("launch", "growth", "stable"):
         field = f"google_phase_{phase_key}"
         phase_meta = (phases or {}).get(phase_key, {})
-        summary_val = result.get(field)
-        if summary_val and phase_meta:
+        gemini_val = result.get(field)
+        if gemini_val and phase_meta:
+            # Gemini가 {summary, keywords} 객체 또는 문자열 반환 모두 처리
+            if isinstance(gemini_val, dict):
+                summary = gemini_val.get("summary", "")
+                keywords = gemini_val.get("keywords", [])
+            else:
+                summary = str(gemini_val)
+                keywords = []
             result[field] = json.dumps({
-                "summary": summary_val if isinstance(summary_val, str) else "",
+                "summary": summary,
                 "count": phase_meta.get("count", 0),
                 "date_from": phase_meta.get("date_from", ""),
                 "date_to": phase_meta.get("date_to", ""),
                 "sentiment": phase_meta.get("sentiment"),  # 전체 버킷 기반 긍정률
+                "avg_rating": phase_meta.get("avg_rating"),  # 전체 버킷 기반 평균 평점
+                "keywords": keywords,
             }, ensure_ascii=False)
         else:
             result[field] = ""
@@ -159,15 +168,17 @@ def _build_prompt(
             + "\n".join(phase_parts)
         )
         phase_instructions = '''\
-  "google_phase_launch": "출시 초반 핵심 트렌드 한 줄 (데이터 없으면 null)",
-  "google_phase_growth": "성장기 핵심 트렌드 한 줄 (데이터 없으면 null)",
-  "google_phase_stable": "안정기 핵심 트렌드 한 줄 (데이터 없으면 null)",'''
+  "google_phase_launch": {"summary": "출시 초반 핵심 트렌드 한 줄", "keywords": ["이 시기 대표 이슈/키워드 5개"]},
+  "google_phase_growth": {"summary": "성장기 핵심 트렌드 한 줄", "keywords": ["이 시기 대표 이슈/키워드 5개"]},
+  "google_phase_stable": {"summary": "안정기 핵심 트렌드 한 줄", "keywords": ["이 시기 대표 이슈/키워드 5개"]},
+  (데이터 없는 시기는 해당 필드에 null 반환)'''
     else:
         phases_section = ""
         phase_instructions = '''\
   "google_phase_launch": null,
   "google_phase_growth": null,
-  "google_phase_stable": null,'''
+  "google_phase_stable": null,
+'''
 
     return f"""당신은 모바일 게임 리뷰 분석 전문가입니다. 한국어로 응답하세요.
 

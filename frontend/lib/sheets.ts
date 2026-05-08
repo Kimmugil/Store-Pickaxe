@@ -203,6 +203,19 @@ export const getAppReviews = unstable_cache(
   { revalidate: 300, tags: ["app-reviews"] }
 );
 
+export async function getGoogleRatingRows(spreadsheetId: string): Promise<{ rating: number; reviewed_at: string }[]> {
+  try {
+    const rows = await readRange(spreadsheetId, "GOOGLE_REVIEWS!A:G");
+    if (rows.length < 2) return [];
+    const records = rowsToRecords<Record<string, string>>(rows);
+    return records
+      .map((r) => ({ rating: parseInt(r.rating) || 0, reviewed_at: r.reviewed_at ?? "" }))
+      .filter((r) => r.rating > 0 && r.reviewed_at);
+  } catch {
+    return [];
+  }
+}
+
 // ── 쓰기 ─────────────────────────────────────────────────────────
 
 export async function registerAppToMaster(app: {

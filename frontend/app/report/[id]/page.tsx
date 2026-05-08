@@ -13,6 +13,13 @@ interface ReportData {
   apple_reviews: Review[];
 }
 
+interface MonthlyRatings {
+  ratings: Record<string, { avg: number; count: number }>;
+  release_date: string;
+  phase_thresholds: { launch_days: number; growth_days: number };
+  total_reviews: number;
+}
+
 type Tab = "summary" | "platform" | "phases" | "reviews";
 type TaggedReview = Review & { _platform: "google" | "apple" };
 
@@ -50,7 +57,6 @@ function ReportContent() {
 
   const { analysis, meta, google_reviews, apple_reviews } = data;
 
-  // 플랫폼 태그를 붙인 통합 리뷰
   const taggedGoogle: TaggedReview[] = google_reviews.map((r) => ({ ...r, _platform: "google" as const }));
   const taggedApple: TaggedReview[] = apple_reviews.map((r) => ({ ...r, _platform: "apple" as const }));
   const allTagged: TaggedReview[] = [...taggedGoogle, ...taggedApple];
@@ -124,7 +130,7 @@ function ReportContent() {
         />
       )}
       {activeTab === "phases" && hasPhases && (
-        <PhasesTab analysis={analysis} />
+        <PhasesTab analysis={analysis} appKey={appKey} googleReviews={taggedGoogle} />
       )}
       {activeTab === "reviews" && (
         <ReviewsTab
@@ -189,42 +195,42 @@ function SummaryTab({
   return (
     <div className="space-y-5">
       <MethodologyNote items={[
-        { label: "샘플링", value: "실제 평점 분포 비례 + 저평점(1~2★) 1.5배 가중 (게임마다 자동 적용)" },
-        { label: "긍정도", value: "전체 수집 리뷰 기반 실제 평점 분포 (5★=100% · 4★=75% · 3★=50% · 2★=25% · 1★=0%)" },
+        { label: "샘플링", value: `실제 평점 분포 비례 + 저평점(1~2★) 1.5배 가중 (게임마다 자동 적용) — Google ${analysis.sample_count_google}건 + Apple ${analysis.sample_count_apple}건 분석` },
+        { label: "주요 이슈 선정", value: "Gemini AI가 샘플 리뷰 전체를 읽고 반복적으로 등장하는 테마를 주제별로 그룹화하여 상위 3개 선정 (단순 빈도가 아닌 영향도 기준)" },
         { label: "수집 대상", value: "한국어 리뷰 · App Store 최근 ~500건 / Google Play 전체 이력" },
+        { label: "주의", value: "별점과 리뷰 내용이 불일치하는 경우가 있습니다 (예: 별점 5점에 불만 내용). AI 분석은 리뷰 텍스트 기준이며 별점은 별도 평점 분포로 확인하세요." },
       ]} />
 
-      {/* 주요 긍정 + 주요 부정 2분할 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {analysis.main_praises.length > 0 && (
-          <section className="space-y-3">
-            <h3 className="text-sm font-black" style={{ color: "#10B981" }}>주요 긍정 리뷰</h3>
-            <div className="space-y-3">
-              {analysis.main_praises.map((p, i) => (
-                <ComplaintPraiseItem key={i} item={p} type="praise" allReviews={allReviews} />
-              ))}
-            </div>
-          </section>
-        )}
+      {/* 주요 부정 리뷰 — 먼저 표시 */}
+      {analysis.main_complaints.length > 0 && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-black" style={{ color: "#EF4444" }}>주요 부정 리뷰</h3>
+          <div className="space-y-3">
+            {analysis.main_complaints.map((c, i) => (
+              <ComplaintPraiseItem key={i} item={c} type="complaint" allReviews={allReviews} />
+            ))}
+          </div>
+        </section>
+      )}
 
-        {analysis.main_complaints.length > 0 && (
-          <section className="space-y-3">
-            <h3 className="text-sm font-black" style={{ color: "#EF4444" }}>주요 부정 리뷰</h3>
-            <div className="space-y-3">
-              {analysis.main_complaints.map((c, i) => (
-                <ComplaintPraiseItem key={i} item={c} type="complaint" allReviews={allReviews} />
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
+      {/* 주요 긍정 리뷰 */}
+      {analysis.main_praises.length > 0 && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-black" style={{ color: "#10B981" }}>주요 긍정 리뷰</h3>
+          <div className="space-y-3">
+            {analysis.main_praises.map((p, i) => (
+              <ComplaintPraiseItem key={i} item={p} type="praise" allReviews={allReviews} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
 
 // ─── 주제 + 설명 + 관련 리뷰 토글 ───────────────────────────────
 
-function findRelatedReviews(item: ComplaintPraise, reviews: TaggedReview[], max = 3): TaggedReview[] {
+function findRelatedReviews(item: ComplaintPraise, reviews: TaggedReview[], max = 5): TaggedReview[] {
   const searchText = `${item.title} ${item.description}`;
 
   // 1순위: 제목 전체 포함
@@ -268,17 +274,15 @@ function ComplaintPraiseItem({
   const [open, setOpen] = useState(false);
   const accentColor = type === "complaint" ? "#EF4444" : "#10B981";
 
-  // 플랫폼별 리뷰 분리 검색
   const googleReviews = allReviews.filter((r) => r._platform === "google");
   const appleReviews = allReviews.filter((r) => r._platform === "apple");
   const related = [
-    ...findRelatedReviews(item, googleReviews, 2),
-    ...findRelatedReviews(item, appleReviews, 1),
-  ].slice(0, 3);
+    ...findRelatedReviews(item, googleReviews, 3),
+    ...findRelatedReviews(item, appleReviews, 2),
+  ].slice(0, 5);
 
   return (
     <div className="rounded-xl p-4 space-y-2.5" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
-      {/* 제목 */}
       <div className="flex items-start gap-2">
         <span className="flex-shrink-0 font-bold text-sm mt-0.5" style={{ color: accentColor }}>
           {type === "complaint" ? "—" : "✓"}
@@ -286,12 +290,10 @@ function ComplaintPraiseItem({
         <span className="text-sm font-black leading-snug" style={{ color: "#1A1A1A" }}>{item.title}</span>
       </div>
 
-      {/* 설명 */}
       {item.description && (
         <p className="text-xs leading-relaxed pl-4" style={{ color: "#6B7280" }}>{item.description}</p>
       )}
 
-      {/* 관련 리뷰 토글 */}
       {related.length > 0 && (
         <div className="pl-4">
           <button
@@ -315,7 +317,7 @@ function ComplaintPraiseItem({
                         color: r._platform === "google" ? "#4285F4" : "#1A1A1A",
                       }}
                     >
-                      {r._platform === "google" ? "Google" : "Apple"}
+                      {r._platform === "google" ? "G" : "A"}
                     </span>
                     {r.reviewed_at && (
                       <span className="text-xs" style={{ color: "#C4C4C4" }}>{formatDate(r.reviewed_at)}</span>
@@ -356,14 +358,13 @@ function PlatformTab({
 
   return (
     <div className="space-y-5">
-      {/* 분석 기준 안내 */}
       <MethodologyNote items={[
         { label: "평점 분포", value: "AI 분석 시점 전체 수집 리뷰 기반 집계 (샘플 아님)" },
-        { label: "긍정도", value: "전체 수집 리뷰 기반 실제 평점 분포 가중 계산" },
         { label: "플랫폼 비교", value: "App Store 수집 기간과 동일한 Google Play 리뷰만 사용 (공정 비교)" },
+        { label: "키워드", value: "각 플랫폼 샘플 리뷰에서 Gemini AI가 선정한 대표 이슈 토픽 5개 (일반 단어 제외)" },
+        { label: "주의", value: "별점과 리뷰 내용이 불일치하는 경우가 있습니다. 평점 분포는 별점 기준이며, 주요 이슈는 리뷰 텍스트 기준입니다." },
       ]} />
 
-      {/* 플랫폼 간 주요 이슈 — 첫 번째 */}
       <PlatformDiffCard
         platformDiff={analysis.platform_diff}
         googleReviews={googleReviews}
@@ -372,13 +373,11 @@ function PlatformTab({
         sampleDateMax={analysis.sample_date_max}
       />
 
-      {/* 통합 플랫폼 카드 (평점 분포 + 긍정도 + 키워드) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {googleTotal > 0 && (
           <PlatformCard
             label="Google Play"
             color="#4285F4"
-            sentiment={analysis.google_sentiment}
             ratingDist={googleDist}
             totalReviews={googleTotal}
             keywords={analysis.keywords_google}
@@ -389,7 +388,6 @@ function PlatformTab({
           <PlatformCard
             label="App Store"
             color="#1A1A1A"
-            sentiment={analysis.apple_sentiment}
             ratingDist={appleDist}
             totalReviews={appleTotal}
             keywords={analysis.keywords_apple}
@@ -410,14 +408,13 @@ function buildDistFromReviews(reviews: TaggedReview[]): Record<string, number> {
   return dist;
 }
 
-// ─── 통합 플랫폼 카드 (평점 분포 + 긍정도 + 키워드) ──────────────
+// ─── 통합 플랫폼 카드 (평점 분포 + 키워드) ──────────────
 
 function PlatformCard({
-  label, color, sentiment, ratingDist, totalReviews, keywords, onKeywordClick,
+  label, color, ratingDist, totalReviews, keywords, onKeywordClick,
 }: {
   label: string;
   color: string;
-  sentiment: number | null;
   ratingDist: Record<string, number>;
   totalReviews: number;
   keywords: string[];
@@ -435,24 +432,6 @@ function PlatformCard({
         <span className="text-sm font-black" style={{ color }}>{label}</span>
         <span className="text-xs" style={{ color: "#9CA3AF" }}>{totalReviews.toLocaleString()}건</span>
       </div>
-
-      {/* 긍정도 */}
-      {sentiment !== null && (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium" style={{ color: "#9CA3AF" }}>긍정도</span>
-            <span
-              className="text-sm font-black"
-              style={{ color: sentiment >= 60 ? "#10B981" : sentiment >= 40 ? "#F59E0B" : "#EF4444" }}
-            >
-              {sentiment}%
-            </span>
-          </div>
-          <div className="h-2 rounded-full overflow-hidden" style={{ background: "#F0EFEC" }}>
-            <div className="h-full rounded-full" style={{ width: `${sentiment}%`, background: color }} />
-          </div>
-        </div>
-      )}
 
       {/* 평점 분포 */}
       <div className="space-y-1.5">
@@ -513,7 +492,7 @@ function PlatformDiffCard({
     if (parsed.google_specific !== undefined || parsed.apple_specific !== undefined) {
       structured = parsed;
     }
-  } catch { /* 구형 텍스트 처리 */ }
+  } catch { /* 구형 텍스트 */ }
 
   const hasContent = structured
     ? (structured.google_specific?.length || 0) + (structured.apple_specific?.length || 0) > 0
@@ -610,108 +589,168 @@ function IssueItem({ text, color, reviews }: { text: string; color: string; revi
 
 // ─── 시기별 트렌드 탭 ────────────────────────────────────────────
 
-function PhasesTab({ analysis }: { analysis: Analysis }) {
+function PhasesTab({
+  analysis, appKey, googleReviews,
+}: {
+  analysis: Analysis;
+  appKey: string;
+  googleReviews: TaggedReview[];
+}) {
+  const [monthlyData, setMonthlyData] = useState<MonthlyRatings | null>(null);
+
+  useEffect(() => {
+    if (!appKey) return;
+    fetch(`/api/monthly_ratings?app_key=${appKey}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => setMonthlyData(d));
+  }, [appKey]);
+
   const phases = [
     { key: "launch" as const, label: "출시 초반", subtitle: "0~30일", color: "#4285F4", data: analysis.google_phase_launch },
     { key: "growth" as const, label: "성장기", subtitle: "31~180일", color: "#34A853", data: analysis.google_phase_growth },
     { key: "stable" as const, label: "안정기", subtitle: "181일+", color: "#9CA3AF", data: analysis.google_phase_stable },
   ];
 
-  const sentimentPoints = phases.map((p) => ({
-    label: p.label,
-    color: p.color,
-    sentiment: p.data?.sentiment ?? null,
-  }));
-
-  const hasSentimentGraph = sentimentPoints.filter((p) => p.sentiment !== null).length >= 2;
-
   return (
     <div className="space-y-5">
       <MethodologyNote items={[
         { label: "대상", value: "Google Play 전체 수집 리뷰 (App Store는 최근 ~500건만 수집되어 시기별 분석 불가)" },
         { label: "분석 조건", value: "해당 시기 리뷰 30건 이상인 경우에만 분석 (30건 미만 시기는 생략)" },
-        { label: "긍정률 계산", value: "해당 시기 전체 리뷰 기반 (샘플 아님) · 5★=100% · 4★=75% · 3★=50% · 2★=25% · 1★=0%" },
-        { label: "시기별 샘플", value: "각 시기에서 최대 40건 샘플링 → Gemini AI 트렌드 요약 (평점 분포 비례 + 저평점 1.5배 가중)" },
+        { label: "시기별 샘플", value: "각 시기에서 최대 150건 샘플링 → Gemini AI 트렌드 요약 (평점 분포 비례 + 저평점 1.5배 가중)" },
+        { label: "평균 평점", value: "해당 시기 전체 리뷰 기반 (샘플 아님) — 별점 단순 평균" },
+        { label: "월별 평점 추이", value: "전체 수집 Google 리뷰 기반 월별 평점 평균 (샘플 아님)" },
+        { label: "주의", value: "별점과 리뷰 내용이 불일치하는 경우가 있습니다. 평점은 별점 기준이며, 트렌드 요약은 리뷰 텍스트 기준입니다." },
       ]} />
 
-      {/* 긍정률 추세 그래프 */}
-      {hasSentimentGraph && (
-        <div className="rounded-xl p-5 space-y-3" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
-          <h3 className="text-sm font-black" style={{ color: "#1A1A1A" }}>시기별 긍정률 추세</h3>
-          <p className="text-xs" style={{ color: "#9CA3AF" }}>각 시기 전체 리뷰의 평점 분포 기반</p>
-          <SentimentTrendGraph points={sentimentPoints} />
+      {/* 월별 평점 추이 그래프 */}
+      <div className="rounded-xl p-5 space-y-3" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
+        <div>
+          <h3 className="text-sm font-black" style={{ color: "#1A1A1A" }}>월별 평점 추이</h3>
+          <p className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>
+            Google Play 전체 수집 리뷰 기반
+            {monthlyData && ` (${monthlyData.total_reviews.toLocaleString()}건)`}
+          </p>
         </div>
-      )}
+        {monthlyData ? (
+          <MonthlyRatingChart data={monthlyData} phases={phases} />
+        ) : (
+          <div className="h-40 rounded-lg animate-pulse" style={{ background: "#F0EFEC" }} />
+        )}
+      </div>
 
       {/* 시기별 카드 */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="space-y-3">
         {phases.map((p) => (
-          <PhaseCard key={p.key} phase={p.data} label={p.label} subtitle={p.subtitle} color={p.color} />
+          <PhaseCard
+            key={p.key}
+            phase={p.data}
+            label={p.label}
+            subtitle={p.subtitle}
+            color={p.color}
+            googleReviews={googleReviews}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-// ─── 긍정률 추세 그래프 ──────────────────────────────────────────
+// ─── 월별 평점 추이 그래프 ──────────────────────────────────────
 
-function SentimentTrendGraph({ points }: {
-  points: { label: string; color: string; sentiment: number | null }[];
+function MonthlyRatingChart({
+  data, phases,
+}: {
+  data: MonthlyRatings;
+  phases: { key: string; label: string; color: string; data: PhaseData | null | undefined }[];
 }) {
-  const W = 400, H = 140, PAD_X = 40, PAD_Y = 28;
-  const innerW = W - PAD_X * 2;
-  const innerH = H - PAD_Y * 2;
-  const xStep = innerW / (points.length - 1);
+  const { ratings, release_date, phase_thresholds } = data;
 
-  const coords = points.map((p, i) => ({
-    ...p,
-    x: PAD_X + i * xStep,
-    y: p.sentiment !== null ? PAD_Y + innerH - (p.sentiment / 100) * innerH : null,
+  const sortedMonths = Object.keys(ratings).sort();
+  if (sortedMonths.length < 2) {
+    return <p className="text-xs text-center py-8" style={{ color: "#9CA3AF" }}>데이터가 충분하지 않습니다</p>;
+  }
+
+  const W = 520, H = 160, PAD_L = 32, PAD_R = 16, PAD_T = 20, PAD_B = 28;
+  const innerW = W - PAD_L - PAD_R;
+  const innerH = H - PAD_T - PAD_B;
+  const minRating = 1, maxRating = 5;
+
+  function toX(i: number) { return PAD_L + (i / (sortedMonths.length - 1)) * innerW; }
+  function toY(rating: number) {
+    return PAD_T + innerH - ((rating - minRating) / (maxRating - minRating)) * innerH;
+  }
+
+  // 시기 zone 배경 (출시일 기준)
+  const phaseZones: { x1: number; x2: number; color: string; label: string }[] = [];
+  if (release_date) {
+    const releaseTime = new Date(release_date).getTime();
+    const launchEnd = new Date(releaseTime + phase_thresholds.launch_days * 86400000).toISOString().slice(0, 7);
+    const growthEnd = new Date(releaseTime + phase_thresholds.growth_days * 86400000).toISOString().slice(0, 7);
+
+    const phaseColors = [
+      { from: release_date.slice(0, 7), to: launchEnd, color: "#EBF3FF", label: "출시초반" },
+      { from: launchEnd, to: growthEnd, color: "#E8F5E9", label: "성장기" },
+      { from: growthEnd, to: sortedMonths[sortedMonths.length - 1], color: "#F5F5F5", label: "안정기" },
+    ];
+
+    for (const zone of phaseColors) {
+      const iFrom = sortedMonths.findIndex((m) => m >= zone.from);
+      const iTo = sortedMonths.findIndex((m) => m > zone.to);
+      if (iFrom < 0) continue;
+      const x1 = toX(iFrom);
+      const x2 = iTo < 0 ? PAD_L + innerW : toX(iTo);
+      if (x2 > x1) phaseZones.push({ x1, x2, color: zone.color, label: zone.label });
+    }
+  }
+
+  const points = sortedMonths.map((m, i) => ({
+    month: m,
+    avg: ratings[m].avg,
+    count: ratings[m].count,
+    x: toX(i),
+    y: toY(ratings[m].avg),
   }));
 
-  const validCoords = coords.filter((c) => c.y !== null);
-  const linePath = validCoords.length >= 2
-    ? validCoords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x} ${c.y}`).join(" ")
-    : "";
+  const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+
+  // X축 레이블: 최대 12개
+  const labelStep = Math.ceil(sortedMonths.length / 12);
+  const labelIndices = sortedMonths
+    .map((_, i) => i)
+    .filter((i) => i % labelStep === 0 || i === sortedMonths.length - 1);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 140 }}>
-      {/* 가로 격자 */}
-      {[0, 25, 50, 75, 100].map((pct) => {
-        const y = PAD_Y + innerH - (pct / 100) * innerH;
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 160 }}>
+      {/* 시기 zone 배경 */}
+      {phaseZones.map((zone, i) => (
+        <rect key={i} x={zone.x1} y={PAD_T} width={zone.x2 - zone.x1} height={innerH}
+          fill={zone.color} opacity={0.6} />
+      ))}
+
+      {/* Y축 격자 */}
+      {[1, 2, 3, 4, 5].map((rating) => {
+        const y = toY(rating);
         return (
-          <g key={pct}>
-            <line x1={PAD_X} x2={W - PAD_X} y1={y} y2={y} stroke="#F0EFEC" strokeWidth={1} />
-            <text x={PAD_X - 5} y={y + 3} textAnchor="end" fill="#C4C4C4" fontSize={9}>{pct}%</text>
+          <g key={rating}>
+            <line x1={PAD_L} x2={PAD_L + innerW} y1={y} y2={y} stroke="#E2E8F0" strokeWidth={0.5} />
+            <text x={PAD_L - 4} y={y + 3} textAnchor="end" fill="#C4C4C4" fontSize={8}>★{rating}</text>
           </g>
         );
       })}
 
-      {/* 연결선 */}
-      {linePath && (
-        <path d={linePath} fill="none" stroke="#E2E8F0" strokeWidth={2} strokeDasharray="4 2" />
-      )}
+      {/* 추이선 */}
+      <path d={linePath} fill="none" stroke="#4285F4" strokeWidth={1.5} strokeLinejoin="round" />
 
-      {/* 포인트 */}
-      {coords.map((c, i) => (
-        c.y !== null ? (
-          <g key={i}>
-            <circle cx={c.x} cy={c.y!} r={6} fill={c.color} stroke="#FFFFFF" strokeWidth={2} />
-            <text x={c.x} y={c.y! - 12} textAnchor="middle" fill={c.color} fontSize={10} fontWeight="bold">
-              {c.sentiment}%
-            </text>
-          </g>
-        ) : (
-          <g key={i}>
-            <circle cx={c.x} cy={PAD_Y + innerH / 2} r={5} fill="#F0EFEC" stroke="#E2E8F0" strokeWidth={1.5} />
-            <text x={c.x} y={PAD_Y + innerH / 2 - 10} textAnchor="middle" fill="#C4C4C4" fontSize={9}>데이터 없음</text>
-          </g>
-        )
+      {/* 데이터 포인트 */}
+      {points.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r={2.5} fill="#4285F4" />
       ))}
 
       {/* X축 레이블 */}
-      {coords.map((c, i) => (
-        <text key={i} x={c.x} y={H - 4} textAnchor="middle" fill="#9CA3AF" fontSize={9}>{c.label}</text>
+      {labelIndices.map((i) => (
+        <text key={i} x={points[i].x} y={H - 4} textAnchor="middle" fill="#9CA3AF" fontSize={7.5}>
+          {points[i].month.slice(2)}
+        </text>
       ))}
     </svg>
   );
@@ -720,13 +759,16 @@ function SentimentTrendGraph({ points }: {
 // ─── 시기별 카드 ──────────────────────────────────────────────────
 
 function PhaseCard({
-  phase, label, subtitle, color,
+  phase, label, subtitle, color, googleReviews,
 }: {
   phase: PhaseData | null | undefined;
   label: string;
   subtitle: string;
   color: string;
+  googleReviews: TaggedReview[];
 }) {
+  const [reviewsOpen, setReviewsOpen] = useState(false);
+
   if (!phase) {
     return (
       <div className="rounded-xl p-4" style={{ background: "#F9F9F7", border: "1.5px solid #E2E8F0" }}>
@@ -739,29 +781,76 @@ function PhaseCard({
     );
   }
 
+  // 해당 시기 리뷰 필터링
+  const phaseReviews = googleReviews.filter((r) => {
+    const d = (r.reviewed_at || "").slice(0, 10);
+    return d >= phase.date_from && d <= phase.date_to;
+  }).slice(0, 5);
+
   return (
-    <div className="rounded-xl p-4 space-y-2" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
+    <div className="rounded-xl p-4 space-y-3" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
+      {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold" style={{ color }}>{label}</span>
           <span className="text-xs" style={{ color: "#C4C4C4" }}>{subtitle}</span>
         </div>
-        <span className="text-xs" style={{ color: "#9CA3AF" }}>{phase.count.toLocaleString()}건</span>
-      </div>
-      {phase.sentiment !== null && phase.sentiment !== undefined && (
-        <div className="flex items-center gap-2">
-          <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "#F0EFEC" }}>
-            <div className="h-full rounded-full" style={{ width: `${phase.sentiment}%`, background: color }} />
-          </div>
-          <span className="text-xs font-bold flex-shrink-0" style={{ color }}>
-            긍정률 {phase.sentiment}%
-          </span>
+        <div className="flex items-center gap-3">
+          {phase.avg_rating !== null && phase.avg_rating !== undefined && (
+            <span className="text-sm font-black" style={{ color }}>★{phase.avg_rating.toFixed(2)}</span>
+          )}
+          <span className="text-xs" style={{ color: "#9CA3AF" }}>{phase.count.toLocaleString()}건</span>
         </div>
-      )}
+      </div>
+
+      {/* 날짜 */}
       {phase.date_from && (
         <p className="text-xs" style={{ color: "#C4C4C4" }}>{phase.date_from} ~ {phase.date_to}</p>
       )}
+
+      {/* 트렌드 요약 */}
       <p className="text-xs leading-relaxed" style={{ color: "#4A4A4A" }}>{phase.summary}</p>
+
+      {/* 키워드 */}
+      {phase.keywords && phase.keywords.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {phase.keywords.map((k, i) => (
+            <span key={i} className="text-xs px-2 py-0.5 rounded-full"
+              style={{ background: "#F0EFEC", border: "1px solid #E2E8F0", color: "#4A4A4A" }}>
+              {k}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* 해당 시기 리뷰 토글 */}
+      {phaseReviews.length > 0 && (
+        <div>
+          <button
+            onClick={() => setReviewsOpen((v) => !v)}
+            className="flex items-center gap-1 text-xs font-medium"
+            style={{ color }}
+          >
+            이 시기 리뷰 {phaseReviews.length}건
+            {reviewsOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+          </button>
+          {reviewsOpen && (
+            <div className="mt-2 space-y-2">
+              {phaseReviews.map((r) => (
+                <div key={r.review_id} className="pl-3 py-2 space-y-1" style={{ borderLeft: `2px solid ${color}30` }}>
+                  <div className="flex items-center gap-2">
+                    <StarRating rating={r.rating} size="xs" />
+                    {r.reviewed_at && (
+                      <span className="text-xs" style={{ color: "#C4C4C4" }}>{formatDate(r.reviewed_at)}</span>
+                    )}
+                  </div>
+                  <p className="text-xs leading-relaxed" style={{ color: "#6B7280" }}>{r.content}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -789,34 +878,39 @@ function ReviewsTab({
 
   return (
     <div className="space-y-4">
-      {/* 플랫폼 토글 */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex rounded-xl overflow-hidden" style={{ border: "2px solid #1A1A1A" }}>
-          {(["google", "apple"] as const).map((p) => (
-            <button key={p} onClick={() => onPlatformChange(p)}
-              className="px-4 py-2 text-xs font-bold transition-colors"
-              style={{
-                background: platform === p ? "#1A1A1A" : "#FFFFFF",
-                color: platform === p ? "#FFFFFF" : "#1A1A1A",
-                borderRight: p === "google" ? "1px solid #1A1A1A" : undefined,
-              }}>
-              {p === "google" ? "Google Play" : "App Store"}
-            </button>
-          ))}
+      {/* 플랫폼 토글 + 기준 레이블 */}
+      <div className="flex items-center gap-3 flex-wrap justify-between">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex rounded-xl overflow-hidden" style={{ border: "2px solid #1A1A1A" }}>
+            {(["google", "apple"] as const).map((p) => (
+              <button key={p} onClick={() => onPlatformChange(p)}
+                className="px-4 py-2 text-xs font-bold transition-colors"
+                style={{
+                  background: platform === p ? "#1A1A1A" : "#FFFFFF",
+                  color: platform === p ? "#FFFFFF" : "#1A1A1A",
+                  borderRight: p === "google" ? "1px solid #1A1A1A" : undefined,
+                }}>
+                {p === "google" ? "Google Play" : "App Store"}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 flex-wrap">
+            {[0, 1, 2, 3, 4, 5].map((r) => (
+              <button key={r} onClick={() => setMinRating(r)}
+                className="px-2.5 py-1 text-xs font-medium rounded-full"
+                style={{
+                  background: minRating === r ? "#FFD600" : "#F0EFEC",
+                  border: "1.5px solid #1A1A1A",
+                  color: "#1A1A1A",
+                }}>
+                {r === 0 ? "전체" : `★${r}`}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-1 flex-wrap">
-          {[0, 1, 2, 3, 4, 5].map((r) => (
-            <button key={r} onClick={() => setMinRating(r)}
-              className="px-2.5 py-1 text-xs font-medium rounded-full"
-              style={{
-                background: minRating === r ? "#FFD600" : "#F0EFEC",
-                border: "1.5px solid #1A1A1A",
-                color: "#1A1A1A",
-              }}>
-              {r === 0 ? "전체" : `★${r}`}
-            </button>
-          ))}
-        </div>
+        <span className="text-xs font-medium" style={{ color: "#9CA3AF" }}>
+          최근 {reviews.length.toLocaleString()}건 기준
+        </span>
       </div>
 
       {/* 키워드 필터 */}

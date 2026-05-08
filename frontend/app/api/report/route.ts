@@ -19,8 +19,8 @@ export async function GET(req: NextRequest) {
 
     const [analyses, google_reviews, apple_reviews] = await Promise.all([
       getAppAnalyses(ssId),
-      getAppReviews(ssId, "google", 200),
-      getAppReviews(ssId, "apple", 200),
+      getAppReviews(ssId, "google", 1000),
+      getAppReviews(ssId, "apple", 500),
     ]);
 
     const analysis = analyses.find((a) => a.analysis_id === analysisId);

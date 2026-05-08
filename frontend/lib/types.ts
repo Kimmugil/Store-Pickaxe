@@ -36,7 +36,9 @@ export interface PhaseData {
   count: number;
   date_from: string;
   date_to: string;
-  sentiment?: number | null;  // 해당 시기 전체 리뷰 기반 긍정률
+  sentiment?: number | null;
+  avg_rating?: number | null;  // 해당 시기 전체 리뷰 기반 평균 평점
+  keywords?: string[];         // 해당 시기 대표 키워드
 }
 
 export interface ComplaintPraise {

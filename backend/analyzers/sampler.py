@@ -155,7 +155,7 @@ _PHASE_GROWTH_DAYS = 180  # 성장기: 31~180일 / 안정기: 181일+
 def sample_phases(
     google_reviews: list[dict],
     release_date: str,
-    max_per_phase: int = 40,
+    max_per_phase: int = 150,
 ) -> dict[str, dict]:
     """
     출시일 기준 Google 리뷰 3단계 분할 샘플링.
@@ -203,11 +203,13 @@ def sample_phases(
         if len(reviews) < _PHASE_MIN_REVIEWS:
             continue  # 데이터 부족 — 스킵
         dates = [r.get("reviewed_at", "")[:10] for r in reviews if r.get("reviewed_at", "")]
+        avg_rating = round(sum(int(r.get("rating", 0)) for r in reviews) / len(reviews), 2) if reviews else None
         result[phase] = {
             "reviews": _weighted_sample(reviews, max_per_phase),
             "count": len(reviews),
             "date_from": min(dates)[:10] if dates else "",
             "date_to": max(dates)[:10] if dates else "",
             "sentiment": calc_sentiment(reviews),  # 전체 버킷 기반 (샘플 아님)
+            "avg_rating": avg_rating,  # 전체 버킷 기반 평균 평점
         }
     return result
