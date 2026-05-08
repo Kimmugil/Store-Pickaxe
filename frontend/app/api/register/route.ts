@@ -4,9 +4,9 @@ import { getAllAppsDirect, registerAppToMaster } from "@/lib/sheets";
 import { slugify } from "@/lib/utils";
 
 async function triggerOnboarding(appKey: string): Promise<void> {
-  const token = process.env.GITHUB_TOKEN;
+  const token = process.env.GITHUB_PAT;
   const repo = process.env.GITHUB_REPO;
-  if (!token || !repo) throw new Error("GITHUB_TOKEN 또는 GITHUB_REPO 환경변수 미설정");
+  if (!token || !repo) throw new Error("GITHUB_PAT 또는 GITHUB_REPO 환경변수 미설정");
 
   const res = await fetch(
     `https://api.github.com/repos/${repo}/actions/workflows/collect.yml/dispatches`,

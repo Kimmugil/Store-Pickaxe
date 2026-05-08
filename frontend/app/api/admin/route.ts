@@ -9,9 +9,9 @@ async function verifyPassword(body: Record<string, unknown>): Promise<boolean> {
 }
 
 async function triggerGitHubWorkflow(workflow: string, inputs: Record<string, string>): Promise<void> {
-  const token = process.env.GITHUB_TOKEN;
+  const token = process.env.GITHUB_PAT;
   const repo = process.env.GITHUB_REPO; // e.g. "owner/repo"
-  if (!token || !repo) throw new Error("GITHUB_TOKEN 또는 GITHUB_REPO 환경변수가 없습니다.");
+  if (!token || !repo) throw new Error("GITHUB_PAT 또는 GITHUB_REPO 환경변수가 없습니다.");
 
   const res = await fetch(
     `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`,

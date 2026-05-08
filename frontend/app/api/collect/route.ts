@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 async function triggerCollect(app_key: string, mode: "onboarding" | "update") {
-  const token = process.env.GITHUB_TOKEN;
+  const token = process.env.GITHUB_PAT;
   const repo = process.env.GITHUB_REPO;
-  if (!token || !repo) throw new Error("GITHUB_TOKEN 또는 GITHUB_REPO 환경변수가 없습니다.");
+  if (!token || !repo) throw new Error("GITHUB_PAT 또는 GITHUB_REPO 환경변수가 없습니다.");
 
   const res = await fetch(
     `https://api.github.com/repos/${repo}/actions/workflows/collect.yml/dispatches`,
