@@ -169,7 +169,7 @@ export default function AddPage() {
                   <Zap size={13} color="#1A1A1A" />
                 </div>
                 <h2 className="font-black text-sm text-[#1A1A1A]">
-                  {texts["add.match.auto_label"] || "자동 매칭 제안"}
+                  자동 매칭 제안
                 </h2>
                 <span className="text-xs text-[#9CA3AF]">— 클릭하면 구글 + 애플 동시 선택</span>
               </div>
