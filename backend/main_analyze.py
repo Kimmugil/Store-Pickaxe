@@ -6,7 +6,7 @@
   FORCE     true이면 pending_analysis 체크 없이 강제 실행 (재분석 용도)
 
 동작:
-  1. 전체 수집 리뷰에서 평점 분포 균형 샘플링
+  1. 전체 수집 리뷰에서 평점 분포 비례 샘플링 (저평점 1.5배 가중)
   2. Apple과 동기간 Google 리뷰 별도 샘플링 (플랫폼 비교용)
   3. 출시일이 있으면 Google 리뷰 시기별 분할 (launch/growth/stable)
   4. Gemini 호출 → 결과 저장 (새 UUID로 추가, 기존 분석 이력 유지)
@@ -21,7 +21,7 @@ from backend import config as cfg
 from backend.sheets import master_sheet as master
 from backend.sheets import app_sheet as asheet
 from backend.analyzers import sampler
-from backend.analyzers.sampler import calc_sentiment
+from backend.analyzers.sampler import calc_sentiment, calc_rating_dist
 from backend.analyzers import gemini_analyzer as gemini
 
 logging.basicConfig(
@@ -73,12 +73,17 @@ def process_app(app: dict) -> None:
     if release_date:
         phases = sampler.sample_phases(google_reviews, release_date)
         for pk, pd in phases.items():
-            log.info(f"[{app_key}] 시기별 {pk}: {pd['count']}건 ({pd['date_from']} ~ {pd['date_to']}), 샘플 {len(pd['reviews'])}개")
+            log.info(f"[{app_key}] 시기별 {pk}: {pd['count']}건 ({pd['date_from']} ~ {pd['date_to']}), 샘플 {len(pd['reviews'])}개, 긍정률 {pd.get('sentiment')}%")
 
     # sentiment: AI 추측이 아닌 전체 수집 리뷰의 실제 평점 분포에서 계산
     google_sentiment = calc_sentiment(google_reviews)
     apple_sentiment = calc_sentiment(apple_reviews)
     log.info(f"[{app_key}] 긍정도 계산 — Google {google_sentiment}% / Apple {apple_sentiment}%")
+
+    # 평점 분포: 전체 수집 리뷰 기반 (AI 분석과 별도로 집계)
+    google_rating_dist = calc_rating_dist(google_reviews)
+    apple_rating_dist = calc_rating_dist(apple_reviews)
+    log.info(f"[{app_key}] 평점 분포 — Google {google_rating_dist} / Apple {apple_rating_dist}")
 
     result = gemini.analyze(
         g_sample, a_sample,
@@ -92,6 +97,8 @@ def process_app(app: dict) -> None:
     result["apple_sentiment"] = apple_sentiment
     result["sample_date_min"] = date_min
     result["sample_date_max"] = date_max
+    result["google_rating_dist"] = google_rating_dist
+    result["apple_rating_dist"] = apple_rating_dist
 
     analysis_id = asheet.save_analysis(ss_id, result)
     log.info(f"[{app_key}] 분석 저장: {analysis_id}")

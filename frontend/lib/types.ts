@@ -36,6 +36,12 @@ export interface PhaseData {
   count: number;
   date_from: string;
   date_to: string;
+  sentiment?: number | null;  // 해당 시기 전체 리뷰 기반 긍정률
+}
+
+export interface ComplaintPraise {
+  title: string;
+  description: string;
 }
 
 export interface Analysis {
@@ -44,8 +50,8 @@ export interface Analysis {
   mode: "onboarding" | "update";
   review_scope: string;
   overall_summary: string;
-  main_complaints: string[];
-  main_praises: string[];
+  main_complaints: ComplaintPraise[];
+  main_praises: ComplaintPraise[];
   google_sentiment: number | null;
   apple_sentiment: number | null;
   keywords_google: string[];
@@ -58,6 +64,8 @@ export interface Analysis {
   google_phase_launch?: PhaseData | null;
   google_phase_growth?: PhaseData | null;
   google_phase_stable?: PhaseData | null;
+  google_rating_dist?: Record<string, number>;  // 전체 수집 리뷰 평점 분포
+  apple_rating_dist?: Record<string, number>;
 }
 
 export interface Review {

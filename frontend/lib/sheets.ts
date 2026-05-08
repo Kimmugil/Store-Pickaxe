@@ -4,7 +4,7 @@
  */
 import { google } from "googleapis";
 import { unstable_cache } from "next/cache";
-import type { AppMeta, CollectionLog, Analysis, Review } from "./types";
+import type { AppMeta, CollectionLog, Analysis, Review, ComplaintPraise } from "./types";
 
 function getAuth() {
   const raw = process.env.GOOGLE_CREDENTIALS_JSON;
@@ -59,7 +59,7 @@ function rowsToRecords<T>(rows: string[][]): T[] {
 
 const MASTER_ID = () => process.env.MASTER_SPREADSHEET_ID!;
 
-// MASTER 헤더 (새 스키마)
+// MASTER 헤더 (A:Q, 17컬럼)
 const MASTER_HEADERS = [
   "app_key", "app_name", "developer",
   "google_package", "apple_app_id", "icon_url",
@@ -158,7 +158,7 @@ export const getCollectionLogs = unstable_cache(
 export const getAppAnalyses = unstable_cache(
   async (spreadsheetId: string): Promise<Analysis[]> => {
     try {
-      const rows = await readRange(spreadsheetId, "ANALYSIS!A:S");
+      const rows = await readRange(spreadsheetId, "ANALYSIS!A:U");  // A:U (21컬럼)
       return rowsToRecords<Record<string, string>>(rows).map(normalizeAnalysis);
     } catch {
       return [];
@@ -217,20 +217,21 @@ export async function registerAppToMaster(app: {
   try {
     const headerCheck = await readRange(MASTER_ID(), "MASTER!A1:A1");
     if (!headerCheck.length || headerCheck[0]?.[0] !== "app_key") {
-      await writeRange(MASTER_ID(), `MASTER!A1:P1`, [MASTER_HEADERS]);
+      await writeRange(MASTER_ID(), `MASTER!A1:Q1`, [MASTER_HEADERS]);
     }
   } catch {
     // MASTER 탭 없는 경우 무시
   }
 
   const now = new Date().toISOString();
-  await appendRow(MASTER_ID(), "MASTER!A:P", [
+  await appendRow(MASTER_ID(), "MASTER!A:Q", [
     app.app_key, app.app_name, app.developer,
     app.google_package, app.apple_app_id, app.icon_url,
     "", "", "", "",       // ratings + review_counts
     "active",             // status
     app.spreadsheet_id,
     now, "", "", "FALSE", // timestamps + pending_analysis
+    "",                   // release_date
   ]);
 }
 
@@ -258,7 +259,7 @@ export async function deleteAppFromMaster(appKey: string): Promise<void> {
 }
 
 export async function updateAppField(appKey: string, field: string, value: string): Promise<void> {
-  const rows = await readRange(MASTER_ID(), "MASTER!A:P");
+  const rows = await readRange(MASTER_ID(), "MASTER!A:Q");  // A:Q (17컬럼, release_date 포함)
   if (rows.length < 2) return;
   const headers = rows[0];
   const colIdx = headers.indexOf(field);
@@ -307,6 +308,18 @@ function normalizeLog(r: Record<string, string>): CollectionLog {
 }
 
 function normalizeAnalysis(r: Record<string, string>): Analysis {
+  // 구형(string[]) 또는 신형({title,description}[]) 모두 처리
+  const safeParseItems = (s: string): ComplaintPraise[] => {
+    try {
+      const parsed = JSON.parse(s.replace(/'/g, '"'));
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((item) =>
+        typeof item === "string"
+          ? { title: item, description: "" }
+          : { title: String(item.title ?? ""), description: String(item.description ?? "") }
+      );
+    } catch { return []; }
+  };
   const safeParse = (s: string): string[] => {
     try { return JSON.parse(s.replace(/'/g, '"')); } catch { return []; }
   };
@@ -314,14 +327,22 @@ function normalizeAnalysis(r: Record<string, string>): Analysis {
     if (!s) return null;
     try { return JSON.parse(s); } catch { return null; }
   };
+  const safeParseRatingDist = (s: string): Record<string, number> => {
+    if (!s) return {};
+    try {
+      const parsed = JSON.parse(s);
+      return (parsed && typeof parsed === "object" && !Array.isArray(parsed)) ? parsed : {};
+    } catch { return {}; }
+  };
+
   return {
     analysis_id: r.analysis_id ?? "",
     created_at: r.created_at ?? "",
     mode: (r.mode as Analysis["mode"]) || "onboarding",
     review_scope: r.review_scope ?? "",
     overall_summary: r.overall_summary ?? "",
-    main_complaints: safeParse(r.main_complaints),
-    main_praises: safeParse(r.main_praises),
+    main_complaints: safeParseItems(r.main_complaints),
+    main_praises: safeParseItems(r.main_praises),
     google_sentiment: r.google_sentiment !== "" ? parseFloat(r.google_sentiment) || null : null,
     apple_sentiment: r.apple_sentiment !== "" ? parseFloat(r.apple_sentiment) || null : null,
     keywords_google: safeParse(r.keywords_google),
@@ -334,5 +355,7 @@ function normalizeAnalysis(r: Record<string, string>): Analysis {
     google_phase_launch: safeParsePhase(r.google_phase_launch),
     google_phase_growth: safeParsePhase(r.google_phase_growth),
     google_phase_stable: safeParsePhase(r.google_phase_stable),
+    google_rating_dist: safeParseRatingDist(r.google_rating_dist),
+    apple_rating_dist: safeParseRatingDist(r.apple_rating_dist),
   };
 }

@@ -85,7 +85,7 @@ function AppCard({
 
   return (
     <Link href={`/${app.app_key}`} className="block card-hover p-0 overflow-hidden">
-      <div className="flex items-start gap-4 p-5" style={{ borderBottom: "2px solid #1A1A1A" }}>
+      <div className="flex items-start gap-4 p-5" style={{ borderBottom: "1px solid #E2E8F0" }}>
         {app.icon_url ? (
           <img
             src={app.icon_url} alt={app.app_name} width={56} height={56}
@@ -143,7 +143,7 @@ function AppCard({
 
       <div
         className="flex items-center justify-between px-5 py-3"
-        style={{ borderTop: "2px solid #1A1A1A", background: "#FAFAFA" }}
+        style={{ borderTop: "1px solid #E2E8F0", background: "#FAFAFA" }}
       >
         <span className="text-xs font-bold" style={{ color: "#9CA3AF" }}>
           리뷰 {totalReviews.toLocaleString()}건

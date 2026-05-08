@@ -3,7 +3,7 @@ Gemini AI 분석 엔진
 
 sentiment(긍정도)는 AI에게 묻지 않고 실제 평점 분포에서 계산 (sampler.calc_sentiment).
 Gemini는 텍스트 해석이 필요한 항목만 담당:
-  - overall_summary, main_complaints, main_praises
+  - overall_summary, main_complaints, main_praises (각 {title, description} 구조)
   - keywords (구체적 이슈 토픽 한정)
   - platform_diff (구조화된 플랫폼별 차이)
   - google_phase_* (시기별 트렌드 요약)
@@ -41,7 +41,7 @@ def analyze(
         google_reviews: 전체 Google 샘플 (종합 요약/불만/칭찬/키워드 기반)
         apple_reviews:  전체 Apple 샘플
         same_period_google: Apple과 동기간 Google 샘플 (platform_diff 기반)
-        phases: {"launch": {reviews, count, date_from, date_to}, ...} (시기별 분석)
+        phases: {"launch": {reviews, count, date_from, date_to, sentiment}, ...} (시기별 분석)
         release_date: 출시일 (YYYY-MM-DD)
     Returns:
         dict — sentiment 필드 없음 (caller가 calc_sentiment로 직접 계산해서 주입)
@@ -75,7 +75,7 @@ def analyze(
     else:
         result["platform_diff"] = ""
 
-    # 시기별 결과에 count/date 메타데이터 병합
+    # 시기별 결과에 count/date/sentiment 메타데이터 병합
     for phase_key in ("launch", "growth", "stable"):
         field = f"google_phase_{phase_key}"
         phase_meta = (phases or {}).get(phase_key, {})
@@ -86,6 +86,7 @@ def analyze(
                 "count": phase_meta.get("count", 0),
                 "date_from": phase_meta.get("date_from", ""),
                 "date_to": phase_meta.get("date_to", ""),
+                "sentiment": phase_meta.get("sentiment"),  # 전체 버킷 기반 긍정률
             }, ensure_ascii=False)
         else:
             result[field] = ""
@@ -178,8 +179,16 @@ def _build_prompt(
 
 {{
   "overall_summary": "전체 리뷰 기반 핵심 상황 (100자 이내)",
-  "main_complaints": ["주요 불만 1 (30자 이내)", "주요 불만 2", "주요 불만 3"],
-  "main_praises": ["주요 칭찬 1 (30자 이내)", "주요 칭찬 2", "주요 칭찬 3"],
+  "main_complaints": [
+    {{"title": "주요 불만 주제 (20자 이내)", "description": "이 불만에 대한 구체적 설명. 어떤 유저들이 왜 불편해하는지 (60자 이내)"}},
+    {{"title": "주요 불만 주제 2", "description": "설명 2"}},
+    {{"title": "주요 불만 주제 3", "description": "설명 3"}}
+  ],
+  "main_praises": [
+    {{"title": "주요 칭찬 주제 (20자 이내)", "description": "이 칭찬에 대한 구체적 설명. 어떤 점이 왜 좋다고 하는지 (60자 이내)"}},
+    {{"title": "주요 칭찬 주제 2", "description": "설명 2"}},
+    {{"title": "주요 칭찬 주제 3", "description": "설명 3"}}
+  ],
   "keywords_google": ["불만·칭찬을 대표하는 구체적 이슈 토픽 5개. '게임'·'재미'·'레벨' 같은 일반 단어 제외. 예: '과금유도', '서버불안정', '밸런스붕괴'"],
   "keywords_apple": ["동일 기준, App Store 리뷰 기반 5개"],
 {platform_diff_instruction}

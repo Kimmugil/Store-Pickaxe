@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronRight, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import type { AppMeta, CollectionLog, Analysis } from "@/lib/types";
 
 interface AppDetailData {
@@ -18,6 +18,7 @@ export default function AppDetailPage() {
 
   const [data, setData] = useState<AppDetailData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [logsOpen, setLogsOpen] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -98,7 +99,12 @@ export default function AppDetailPage() {
               )}
               {(meta.google_review_count ?? 0) > 0 && (
                 <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                  수집된 리뷰 Google {(meta.google_review_count ?? 0).toLocaleString()} · Apple {(meta.apple_review_count ?? 0).toLocaleString()}
+                  수집 Google {(meta.google_review_count ?? 0).toLocaleString()} · Apple {(meta.apple_review_count ?? 0).toLocaleString()}
+                </span>
+              )}
+              {meta.release_date && (
+                <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                  출시 {meta.release_date}
                 </span>
               )}
             </div>
@@ -106,41 +112,7 @@ export default function AppDetailPage() {
         </div>
       </div>
 
-      {/* 수집 이력 */}
-      {logs.length > 0 && (
-        <div className="card p-6 space-y-4">
-          <h2 className="font-black text-base" style={{ color: "#1A1A1A" }}>수집 이력</h2>
-          <div className="space-y-2">
-            {[...logs].reverse().slice(0, 5).map((log, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between px-4 py-2 rounded-xl text-sm"
-                style={{ background: "#F0EFEC", border: "1.5px solid #E2E8F0" }}
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className="text-xs font-black px-2 py-0.5 rounded-full"
-                    style={{
-                      background: log.mode === "onboarding" ? "#1A1A1A" : "#E2E8F0",
-                      color: log.mode === "onboarding" ? "#FFFFFF" : "#4A4A4A",
-                    }}
-                  >
-                    {log.mode === "onboarding" ? "전체" : "신규"}
-                  </span>
-                  <span style={{ color: "#4A4A4A" }}>
-                    Google +{log.google_added} · Apple +{log.apple_added}
-                  </span>
-                </div>
-                <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                  {formatDate(log.collected_at)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 분석 리포트 목록 */}
+      {/* AI 분석 리포트 */}
       <div className="card p-6 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="font-black text-base" style={{ color: "#1A1A1A" }}>AI 분석 리포트</h2>
@@ -167,55 +139,112 @@ export default function AppDetailPage() {
         ) : (
           <div className="space-y-3">
             {sortedAnalyses.map((analysis) => (
-              <Link
+              <div
                 key={analysis.analysis_id}
-                href={`/report/${analysis.analysis_id}?app_key=${appKey}`}
-                className="block card-hover p-4"
+                className="rounded-xl p-4 space-y-3"
+                style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span
-                        className="text-xs font-black px-2 py-0.5 rounded-full"
-                        style={{ background: "#F0EFEC", border: "1.5px solid #1A1A1A", color: "#1A1A1A" }}
-                      >
-                        {analysis.mode === "onboarding" ? "전체 분석" : "업데이트"}
+                {/* 날짜 */}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-black" style={{ color: "#1A1A1A" }}>
+                    {formatDate(analysis.created_at)}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {analysis.google_sentiment !== null && (
+                      <span className="text-xs font-bold" style={{ color: "#4285F4" }}>
+                        G {analysis.google_sentiment}%
                       </span>
-                      <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                        {analysis.review_scope}
+                    )}
+                    {analysis.apple_sentiment !== null && (
+                      <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
+                        A {analysis.apple_sentiment}%
                       </span>
-                    </div>
-                    <p className="text-sm leading-relaxed" style={{ color: "#4A4A4A" }}>
-                      {analysis.overall_summary}
-                    </p>
-                    <div className="flex items-center gap-3 mt-2 flex-wrap">
-                      {analysis.google_sentiment !== null && (
-                        <span className="text-xs font-bold" style={{ color: "#4285F4" }}>
-                          Google {analysis.google_sentiment}%
-                        </span>
-                      )}
-                      {analysis.apple_sentiment !== null && (
-                        <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
-                          Apple {analysis.apple_sentiment}%
-                        </span>
-                      )}
-                      <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                        샘플 {analysis.sample_count_google + analysis.sample_count_apple}건
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                      {formatDate(analysis.created_at)}
-                    </span>
-                    <ChevronRight size={16} style={{ color: "#9CA3AF" }} />
+                    )}
                   </div>
                 </div>
-              </Link>
+                {/* 요약 */}
+                <p className="text-sm leading-relaxed" style={{ color: "#4A4A4A" }}>
+                  {analysis.overall_summary}
+                </p>
+                {/* 리포트 보기 버튼 */}
+                <Link
+                  href={`/report/${analysis.analysis_id}?app_key=${appKey}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg"
+                  style={{ background: "#1A1A1A", color: "#FFFFFF" }}
+                >
+                  리포트 보기 <ChevronRight size={12} />
+                </Link>
+              </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* 수집 이력 (토글) */}
+      {logs.length > 0 && (
+        <div className="card overflow-hidden">
+          <button
+            onClick={() => setLogsOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-6 py-4"
+            style={{ background: "#FAFAFA" }}
+          >
+            <span className="font-black text-sm" style={{ color: "#1A1A1A" }}>
+              수집 이력
+              <span
+                className="ml-2 text-xs font-bold px-1.5 py-0.5 rounded-full"
+                style={{ background: "#F0EFEC", color: "#9CA3AF" }}
+              >
+                {logs.length}건
+              </span>
+            </span>
+            <div className="flex items-center gap-2">
+              {meta.spreadsheet_id && (
+                <a
+                  href={`https://docs.google.com/spreadsheets/d/${meta.spreadsheet_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg"
+                  style={{ background: "#EBF3FF", color: "#4285F4", border: "1px solid #BFDBFE" }}
+                >
+                  시트 보기 <ExternalLink size={11} />
+                </a>
+              )}
+              {logsOpen ? <ChevronUp size={16} style={{ color: "#9CA3AF" }} /> : <ChevronDown size={16} style={{ color: "#9CA3AF" }} />}
+            </div>
+          </button>
+
+          {logsOpen && (
+            <div className="px-6 pb-5 space-y-2">
+              {[...logs].reverse().slice(0, 10).map((log, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between px-4 py-2 rounded-xl text-sm"
+                  style={{ background: "#F0EFEC", border: "1px solid #E2E8F0" }}
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="text-xs font-black px-2 py-0.5 rounded-full"
+                      style={{
+                        background: log.mode === "onboarding" ? "#1A1A1A" : "#E2E8F0",
+                        color: log.mode === "onboarding" ? "#FFFFFF" : "#4A4A4A",
+                      }}
+                    >
+                      {log.mode === "onboarding" ? "전체" : "신규"}
+                    </span>
+                    <span style={{ color: "#4A4A4A" }}>
+                      Google +{log.google_added} · Apple +{log.apple_added}
+                    </span>
+                  </div>
+                  <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                    {formatDate(log.collected_at)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

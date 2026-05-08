@@ -224,6 +224,41 @@ export default function HomePage() {
                       </p>
                     )}
 
+                    {/* 등록 바 — 선택 즉시 상단에 표시 */}
+                    {hasSelection && (
+                      <div
+                        className="flex items-center justify-between gap-4 rounded-2xl px-5 py-4"
+                        style={{ background: "#FFFDE7", border: "2px solid #1A1A1A" }}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {(selectedGoogle?.icon_url || selectedApple?.icon_url) && (
+                            <Image
+                              src={selectedGoogle?.icon_url || selectedApple?.icon_url || ""}
+                              alt="" width={36} height={36}
+                              className="rounded-xl flex-shrink-0"
+                              style={{ border: "1.5px solid #1A1A1A" }} unoptimized
+                            />
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-black text-sm truncate" style={{ color: "#1A1A1A" }}>
+                              {selectedGoogle?.name || selectedApple?.name}
+                            </p>
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                              style={{ background: "#F0EFEC", border: "1.5px solid #1A1A1A", color: "#4A4A4A" }}>
+                              {selectedGoogle && selectedApple ? "Google + Apple" : selectedGoogle ? "Google만" : "Apple만"}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          className="neo-button-primary flex-shrink-0"
+                          onClick={handleRegister}
+                          disabled={registering}
+                        >
+                          {registering ? "등록 중..." : "등록하기"} <ArrowRight size={14} />
+                        </button>
+                      </div>
+                    )}
+
                     {suggestions.length > 0 && (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
@@ -291,40 +326,6 @@ export default function HomePage() {
                       </div>
                     </div>
 
-                    {/* 모달 내 등록 바 */}
-                    {hasSelection && (
-                      <div
-                        className="flex items-center justify-between gap-4 rounded-2xl px-5 py-4 mt-2"
-                        style={{ background: "#FFFDE7", border: "2px solid #1A1A1A" }}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {(selectedGoogle?.icon_url || selectedApple?.icon_url) && (
-                            <Image
-                              src={selectedGoogle?.icon_url || selectedApple?.icon_url || ""}
-                              alt="" width={36} height={36}
-                              className="rounded-xl flex-shrink-0"
-                              style={{ border: "1.5px solid #1A1A1A" }} unoptimized
-                            />
-                          )}
-                          <div className="min-w-0">
-                            <p className="font-black text-sm truncate" style={{ color: "#1A1A1A" }}>
-                              {selectedGoogle?.name || selectedApple?.name}
-                            </p>
-                            <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                              style={{ background: "#F0EFEC", border: "1.5px solid #1A1A1A", color: "#4A4A4A" }}>
-                              {selectedGoogle && selectedApple ? "Google + Apple" : selectedGoogle ? "Google만" : "Apple만"}
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          className="neo-button-primary flex-shrink-0"
-                          onClick={handleRegister}
-                          disabled={registering}
-                        >
-                          {registering ? "등록 중..." : "등록하기"} <ArrowRight size={14} />
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
 

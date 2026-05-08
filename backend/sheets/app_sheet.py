@@ -2,6 +2,7 @@
 앱별 스프레드시트 CRUD
 탭: COLLECTION_LOG / GOOGLE_REVIEWS / APPLE_REVIEWS / ANALYSIS
 """
+import json
 import uuid
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -39,6 +40,7 @@ ANALYSIS_HEADERS = [
     "sample_count_google", "sample_count_apple",
     "sample_date_min", "sample_date_max",
     "google_phase_launch", "google_phase_growth", "google_phase_stable",
+    "google_rating_dist", "apple_rating_dist",   # 전체 수집 리뷰 평점 분포
 ]
 
 
@@ -180,6 +182,11 @@ def get_apple_reviews(spreadsheet_id: str) -> list[dict]:
 def save_analysis(spreadsheet_id: str, result: dict) -> str:
     ss = _open(spreadsheet_id)
     ws = _ensure(ss, "ANALYSIS", ANALYSIS_HEADERS)
+
+    # 시트가 비어있으면 (헤더 삭제된 경우) 헤더 재작성
+    if not ws.row_values(1):
+        ws.append_row(ANALYSIS_HEADERS, value_input_option="USER_ENTERED")
+
     analysis_id = result.get("analysis_id") or f"anl_{uuid.uuid4().hex[:8]}"
     ws.append_row([
         analysis_id,
@@ -187,12 +194,12 @@ def save_analysis(spreadsheet_id: str, result: dict) -> str:
         result.get("mode", ""),
         result.get("review_scope", ""),
         result.get("overall_summary", ""),
-        str(result.get("main_complaints", [])),
-        str(result.get("main_praises", [])),
+        json.dumps(result.get("main_complaints", []), ensure_ascii=False),
+        json.dumps(result.get("main_praises", []), ensure_ascii=False),
         result.get("google_sentiment", ""),
         result.get("apple_sentiment", ""),
-        str(result.get("keywords_google", [])),
-        str(result.get("keywords_apple", [])),
+        json.dumps(result.get("keywords_google", []), ensure_ascii=False),
+        json.dumps(result.get("keywords_apple", []), ensure_ascii=False),
         result.get("platform_diff", ""),
         result.get("sample_count_google", 0),
         result.get("sample_count_apple", 0),
@@ -201,6 +208,8 @@ def save_analysis(spreadsheet_id: str, result: dict) -> str:
         result.get("google_phase_launch", ""),
         result.get("google_phase_growth", ""),
         result.get("google_phase_stable", ""),
+        json.dumps(result.get("google_rating_dist", {}), ensure_ascii=False),
+        json.dumps(result.get("apple_rating_dist", {}), ensure_ascii=False),
     ], value_input_option="USER_ENTERED")
     return analysis_id
 
