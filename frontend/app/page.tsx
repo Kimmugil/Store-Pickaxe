@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { Search, CheckCircle, ArrowRight, Zap, ChevronRight, Check } from "lucide-react";
+import { Search, CheckCircle, ArrowRight, Zap, ChevronRight, Check, X } from "lucide-react";
 import type { SearchResult, MatchSuggestion, AppMeta, Analysis } from "@/lib/types";
 import { formatRating } from "@/lib/utils";
 import { useTexts } from "@/components/TextsProvider";
@@ -82,39 +82,19 @@ export default function HomePage() {
     }
   }
 
-  if (step === "done") {
-    return (
-      <div className="max-w-md mx-auto text-center py-24 space-y-6">
-        <div
-          className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center"
-          style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
-        >
-          <Check size={28} color="#1A1A1A" strokeWidth={3} />
-        </div>
-        <div>
-          <h2 className="font-black text-2xl" style={{ color: "#1A1A1A" }}>등록 완료!</h2>
-          <p className="text-sm mt-2" style={{ color: "#4A4A4A" }}>
-            게임이 등록되었습니다. 리뷰 수집이 곧 시작됩니다.
-          </p>
-        </div>
-        <div
-          className="text-xs text-left px-5 py-4 rounded-2xl"
-          style={{ background: "#FFFDE7", border: "2px solid #1A1A1A", color: "#4A4A4A" }}
-        >
-          AI 분석은 관리자 승인 후 자동으로 진행됩니다.
-        </div>
-        <button onClick={() => router.push(`/${registeredKey}`)} className="neo-button-primary">
-          상세 보기 <ArrowRight size={14} />
-        </button>
-      </div>
-    );
+  const hasSelection = selectedGoogle || selectedApple;
+  const modalOpen = step === "loading" || step === "confirm" || step === "done";
+
+  function closeModal() {
+    setStep("idle");
+    setSelectedGoogle(null);
+    setSelectedApple(null);
+    setError("");
   }
 
-  const hasSelection = selectedGoogle || selectedApple;
-
   return (
-    <div className="pb-28">
-      {/* ── 히어로 + 검색 (뷰포트 중앙) ─────────────────────────── */}
+    <div className="pb-12">
+      {/* ── 히어로 + 검색 ────────────────────────────────────────── */}
       <div
         className="flex flex-col items-center justify-center text-center gap-5"
         style={{ minHeight: "calc(100vh - 56px - 320px)" }}
@@ -151,97 +131,15 @@ export default function HomePage() {
               {step === "loading" ? "검색 중..." : "검색"}
             </button>
           </div>
-          {error && (
-            <p
-              className="mt-3 text-sm font-bold px-4 py-2 rounded-xl text-left"
-              style={{ color: "#FF6B6B", background: "#FFF5F5", border: "2px solid #FF6B6B" }}
-            >
-              {error}
-            </p>
-          )}
           <p className="mt-2 text-xs" style={{ color: "#9CA3AF" }}>
             {texts["home.search.hint"] || "수집과 분석에 수 분이 소요됩니다"}
           </p>
         </div>
       </div>
 
-      {/* ── 검색 결과 ────────────────────────────────────────────── */}
-      {step === "confirm" && (
-        <div className="max-w-4xl mx-auto space-y-6 mt-4">
-          {suggestions.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-6 h-6 rounded-lg flex items-center justify-center"
-                  style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
-                >
-                  <Zap size={13} color="#1A1A1A" />
-                </div>
-                <h2 className="font-black text-sm" style={{ color: "#1A1A1A" }}>자동 매칭 제안</h2>
-                <span className="text-xs" style={{ color: "#9CA3AF" }}>— 클릭하면 구글 + 애플 동시 선택</span>
-              </div>
-              {suggestions.map((s, i) => {
-                const isActive =
-                  selectedGoogle?.package_name === s.google.package_name &&
-                  selectedApple?.app_id === s.apple.app_id;
-                return (
-                  <div
-                    key={i}
-                    onClick={() => { setSelectedGoogle(s.google); setSelectedApple(s.apple); }}
-                    className="card p-4 flex items-center gap-4 cursor-pointer"
-                    style={isActive ? { background: "#FFFDE7" } : {}}
-                  >
-                    <AppThumbnail result={s.google} />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-black text-sm" style={{ color: "#1A1A1A" }}>{s.google.name}</p>
-                      <p className="text-xs" style={{ color: "#9CA3AF" }}>{s.google.developer}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1.5 rounded-lg px-2 py-1"
-                        style={{ background: "#EBF3FF", border: "1.5px solid #4285F4" }}>
-                        <AppThumbnail result={s.google} small />
-                        <span className="text-xs font-bold" style={{ color: "#4285F4" }}>G</span>
-                      </div>
-                      <span className="text-sm font-bold" style={{ color: "#9CA3AF" }}>+</span>
-                      <div className="flex items-center gap-1.5 rounded-lg px-2 py-1"
-                        style={{ background: "#F0EFEC", border: "1.5px solid #1A1A1A" }}>
-                        <AppThumbnail result={s.apple} small />
-                        <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>A</span>
-                      </div>
-                      <ConfidenceBadge score={s.score} confidence={s.confidence} />
-                    </div>
-                    {isActive
-                      ? <CheckCircle size={18} color="#1A1A1A" className="flex-shrink-0" />
-                      : <div className="w-[18px] h-[18px] rounded-full flex-shrink-0" style={{ border: "2px solid #E2E8F0" }} />
-                    }
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="font-black text-sm" style={{ color: "#1A1A1A" }}>
-                {suggestions.length > 0 ? "직접 선택하기 (선택 사항)" : "검색 결과"}
-              </h2>
-              <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                — 구글·애플 목록에서 각각 클릭하여 선택
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-5">
-              <ResultColumn title="구글 플레이" results={googleResults} platform="google"
-                selected={selectedGoogle} onSelect={setSelectedGoogle} color="#4285F4" />
-              <ResultColumn title="앱 스토어" results={appleResults} platform="apple"
-                selected={selectedApple} onSelect={setSelectedApple} color="#1A1A1A" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── 최근 등록 게임 카로셀 (idle 상태) ───────────────────── */}
-      {step === "idle" && recentApps.length > 0 && (
-        <div className="mt-4 space-y-4">
+      {/* ── 최근 등록 게임 카로셀 (항상 표시) ───────────────────── */}
+      {recentApps.length > 0 && (
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-black text-base" style={{ color: "#1A1A1A" }}>
               {texts["home.recent.title"] || "최근 등록된 게임"}{" "}
@@ -256,8 +154,6 @@ export default function HomePage() {
               전체 보기 <ChevronRight size={12} />
             </Link>
           </div>
-
-          {/* 가로 스크롤 카로셀 */}
           <div
             className="flex gap-4 overflow-x-auto pb-4"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
@@ -269,43 +165,199 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── 등록 바 ──────────────────────────────────────────────── */}
-      {hasSelection && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 p-4">
+      {/* ── 검색 모달 ────────────────────────────────────────────── */}
+      {modalOpen && (
+        <>
+          {/* 딤 배경 */}
           <div
-            className="max-w-4xl mx-auto flex items-center justify-between gap-4 rounded-2xl px-5 py-4"
-            style={{ background: "#FFFFFF", border: "2px solid #1A1A1A", boxShadow: "4px 4px 0px 0px #1A1A1A" }}
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              {(selectedGoogle?.icon_url || selectedApple?.icon_url) && (
-                <Image
-                  src={selectedGoogle?.icon_url || selectedApple?.icon_url || ""}
-                  alt="" width={36} height={36}
-                  className="rounded-xl flex-shrink-0"
-                  style={{ border: "1.5px solid #1A1A1A" }} unoptimized
-                />
-              )}
-              <div className="min-w-0">
-                <p className="font-black text-sm truncate" style={{ color: "#1A1A1A" }}>
-                  {selectedGoogle?.name || selectedApple?.name}
-                </p>
-                <span
-                  className="text-xs font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: "#F0EFEC", border: "1.5px solid #1A1A1A", color: "#4A4A4A" }}
-                >
-                  {selectedGoogle && selectedApple ? "Google + Apple" : selectedGoogle ? "Google만" : "Apple만"}
+            className="fixed inset-0 z-40"
+            style={{ background: "rgba(0,0,0,0.5)" }}
+            onClick={step !== "done" ? closeModal : undefined}
+          />
+
+          {/* 모달 패널 */}
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-8">
+            <div
+              className="w-full max-w-4xl rounded-2xl overflow-hidden"
+              style={{ background: "#FFFFFF", border: "2px solid #1A1A1A", boxShadow: "6px 6px 0px 0px #1A1A1A" }}
+            >
+              {/* 모달 헤더 */}
+              <div
+                className="flex items-center justify-between px-5 py-4"
+                style={{ borderBottom: "2px solid #1A1A1A", background: "#FAFAFA" }}
+              >
+                <span className="font-black text-sm" style={{ color: "#1A1A1A" }}>
+                  {step === "done" ? "등록 완료" : step === "loading" ? "검색 중..." : `"${query}" 검색 결과`}
                 </span>
+                {step !== "done" && (
+                  <button
+                    onClick={closeModal}
+                    className="rounded-lg p-1 hover:opacity-60 transition-opacity"
+                    style={{ color: "#9CA3AF" }}
+                  >
+                    <X size={18} />
+                  </button>
+                )}
+              </div>
+
+              {/* 모달 바디 */}
+              <div className="p-5">
+
+                {/* 로딩 */}
+                {step === "loading" && (
+                  <div className="flex flex-col items-center justify-center py-16 gap-4">
+                    <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+                      style={{ borderColor: "#1A1A1A", borderTopColor: "transparent" }} />
+                    <p className="text-sm font-medium" style={{ color: "#9CA3AF" }}>
+                      Google Play · App Store 검색 중...
+                    </p>
+                  </div>
+                )}
+
+                {/* 검색 결과 */}
+                {step === "confirm" && (
+                  <div className="space-y-6">
+                    {error && (
+                      <p className="text-sm font-bold px-4 py-2 rounded-xl"
+                        style={{ color: "#FF6B6B", background: "#FFF5F5", border: "2px solid #FF6B6B" }}>
+                        {error}
+                      </p>
+                    )}
+
+                    {suggestions.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center"
+                            style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}>
+                            <Zap size={13} color="#1A1A1A" />
+                          </div>
+                          <h2 className="font-black text-sm" style={{ color: "#1A1A1A" }}>자동 매칭 제안</h2>
+                          <span className="text-xs" style={{ color: "#9CA3AF" }}>— 클릭하면 구글 + 애플 동시 선택</span>
+                        </div>
+                        {suggestions.map((s, i) => {
+                          const isActive =
+                            selectedGoogle?.package_name === s.google.package_name &&
+                            selectedApple?.app_id === s.apple.app_id;
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => { setSelectedGoogle(s.google); setSelectedApple(s.apple); }}
+                              className="card p-4 flex items-center gap-4 cursor-pointer"
+                              style={isActive ? { background: "#FFFDE7" } : {}}
+                            >
+                              <AppThumbnail result={s.google} />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-black text-sm" style={{ color: "#1A1A1A" }}>{s.google.name}</p>
+                                <p className="text-xs" style={{ color: "#9CA3AF" }}>{s.google.developer}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5 rounded-lg px-2 py-1"
+                                  style={{ background: "#EBF3FF", border: "1.5px solid #4285F4" }}>
+                                  <AppThumbnail result={s.google} small />
+                                  <span className="text-xs font-bold" style={{ color: "#4285F4" }}>G</span>
+                                </div>
+                                <span className="text-sm font-bold" style={{ color: "#9CA3AF" }}>+</span>
+                                <div className="flex items-center gap-1.5 rounded-lg px-2 py-1"
+                                  style={{ background: "#F0EFEC", border: "1.5px solid #1A1A1A" }}>
+                                  <AppThumbnail result={s.apple} small />
+                                  <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>A</span>
+                                </div>
+                                <ConfidenceBadge score={s.score} confidence={s.confidence} />
+                              </div>
+                              {isActive
+                                ? <CheckCircle size={18} color="#1A1A1A" className="flex-shrink-0" />
+                                : <div className="w-[18px] h-[18px] rounded-full flex-shrink-0" style={{ border: "2px solid #E2E8F0" }} />
+                              }
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <h2 className="font-black text-sm" style={{ color: "#1A1A1A" }}>
+                          {suggestions.length > 0 ? "직접 선택하기 (선택 사항)" : "검색 결과"}
+                        </h2>
+                        <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                          — 구글·애플 목록에서 각각 클릭하여 선택
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-5">
+                        <ResultColumn title="구글 플레이" results={googleResults} platform="google"
+                          selected={selectedGoogle} onSelect={setSelectedGoogle} color="#4285F4" />
+                        <ResultColumn title="앱 스토어" results={appleResults} platform="apple"
+                          selected={selectedApple} onSelect={setSelectedApple} color="#1A1A1A" />
+                      </div>
+                    </div>
+
+                    {/* 모달 내 등록 바 */}
+                    {hasSelection && (
+                      <div
+                        className="flex items-center justify-between gap-4 rounded-2xl px-5 py-4 mt-2"
+                        style={{ background: "#FFFDE7", border: "2px solid #1A1A1A" }}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {(selectedGoogle?.icon_url || selectedApple?.icon_url) && (
+                            <Image
+                              src={selectedGoogle?.icon_url || selectedApple?.icon_url || ""}
+                              alt="" width={36} height={36}
+                              className="rounded-xl flex-shrink-0"
+                              style={{ border: "1.5px solid #1A1A1A" }} unoptimized
+                            />
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-black text-sm truncate" style={{ color: "#1A1A1A" }}>
+                              {selectedGoogle?.name || selectedApple?.name}
+                            </p>
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                              style={{ background: "#F0EFEC", border: "1.5px solid #1A1A1A", color: "#4A4A4A" }}>
+                              {selectedGoogle && selectedApple ? "Google + Apple" : selectedGoogle ? "Google만" : "Apple만"}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          className="neo-button-primary flex-shrink-0"
+                          onClick={handleRegister}
+                          disabled={registering}
+                        >
+                          {registering ? "등록 중..." : "등록하기"} <ArrowRight size={14} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 등록 완료 */}
+                {step === "done" && (
+                  <div className="text-center py-10 space-y-6">
+                    <div
+                      className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center"
+                      style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
+                    >
+                      <Check size={28} color="#1A1A1A" strokeWidth={3} />
+                    </div>
+                    <div>
+                      <h2 className="font-black text-2xl" style={{ color: "#1A1A1A" }}>등록 완료!</h2>
+                      <p className="text-sm mt-2" style={{ color: "#4A4A4A" }}>
+                        게임이 등록되었습니다. 리뷰 수집이 곧 시작됩니다.
+                      </p>
+                    </div>
+                    <div
+                      className="text-xs text-left px-5 py-4 rounded-2xl"
+                      style={{ background: "#FFFDE7", border: "2px solid #1A1A1A", color: "#4A4A4A" }}
+                    >
+                      AI 분석은 관리자 승인 후 자동으로 진행됩니다.
+                    </div>
+                    <button onClick={() => router.push(`/${registeredKey}`)} className="neo-button-primary">
+                      상세 보기 <ArrowRight size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
-            <button
-              className="neo-button-primary flex-shrink-0"
-              onClick={handleRegister}
-              disabled={registering}
-            >
-              {registering ? "등록 중..." : "등록하기"} <ArrowRight size={14} />
-            </button>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
