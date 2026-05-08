@@ -6,6 +6,7 @@
 - 최신 우선
 """
 import random
+from datetime import date as _date
 from backend.config import sample_google_count, sample_apple_count
 
 
@@ -37,7 +38,6 @@ def _weighted_sample(reviews: list[dict], target: int) -> list[dict]:
     def pick(pool: list[dict], n: int) -> list[dict]:
         if not pool:
             return []
-        # thumbs_up 내림차순 정렬 후 상위 절반 우선, 나머지 무작위
         sorted_pool = sorted(pool, key=lambda r: (r.get("thumbs_up") or 0), reverse=True)
         priority = sorted_pool[:max(1, len(sorted_pool) // 2)]
         rest = sorted_pool[max(1, len(sorted_pool) // 2):]
@@ -49,7 +49,6 @@ def _weighted_sample(reviews: list[dict], target: int) -> list[dict]:
 
     sampled = pick(low, n_low) + pick(mid, n_mid) + pick(high, n_high)
 
-    # 부족한 경우 남은 리뷰에서 채움
     sampled_ids = {id(r) for r in sampled}
     leftovers = [r for r in reviews if id(r) not in sampled_ids]
     if len(sampled) < target and leftovers:
@@ -82,3 +81,90 @@ def sample_for_analysis(
     date_max = max(all_dates)[:10] if all_dates else ""
 
     return g_sample, a_sample, date_min, date_max
+
+
+def get_apple_date_range(apple_reviews: list[dict]) -> tuple[str, str]:
+    """Apple 리뷰의 날짜 범위 반환."""
+    dates = [r.get("reviewed_at", "")[:10] for r in apple_reviews if r.get("reviewed_at", "")]
+    if not dates:
+        return "", ""
+    return min(dates), max(dates)
+
+
+def sample_platform_comparison(
+    google_reviews: list[dict],
+    apple_reviews: list[dict],
+) -> tuple[list[dict], str, str]:
+    """
+    Apple과 동기간 Google 리뷰 샘플링 (플랫폼 비교용).
+    App Store는 최근 ~500개만 수집되므로, Google도 같은 기간으로 제한해야 공정한 비교가 가능.
+    Returns: (same_period_google_sample, apple_date_from, apple_date_to)
+    """
+    apple_date_from, apple_date_to = get_apple_date_range(apple_reviews)
+    if not apple_date_from:
+        return [], "", ""
+
+    filtered_google = _filter_reviews(google_reviews)
+    same_period = [
+        r for r in filtered_google
+        if apple_date_from <= (r.get("reviewed_at", "") or "")[:10] <= apple_date_to
+    ]
+    sample = _weighted_sample(same_period, sample_google_count())
+    return sample, apple_date_from, apple_date_to
+
+
+def sample_phases(
+    google_reviews: list[dict],
+    release_date: str,
+    max_per_phase: int = 40,
+) -> dict[str, dict]:
+    """
+    출시일 기준 Google 리뷰 3단계 분할 샘플링.
+    Returns: {
+      "launch": {"reviews": [...], "count": N, "date_from": str, "date_to": str},
+      "growth": {...},
+      "stable": {...},
+    }
+    빈 단계는 포함되지 않음.
+    """
+    if not release_date:
+        return {}
+
+    try:
+        release = _date.fromisoformat(release_date[:10])
+    except ValueError:
+        return {}
+
+    filtered = _filter_reviews(google_reviews)
+    buckets: dict[str, list[dict]] = {"launch": [], "growth": [], "stable": []}
+
+    for r in filtered:
+        rv_str = (r.get("reviewed_at", "") or "")[:10]
+        if not rv_str:
+            continue
+        try:
+            rv_date = _date.fromisoformat(rv_str)
+        except ValueError:
+            continue
+        days = (rv_date - release).days
+        if days < 0:
+            continue
+        elif days <= 90:
+            buckets["launch"].append(r)
+        elif days <= 365:
+            buckets["growth"].append(r)
+        else:
+            buckets["stable"].append(r)
+
+    result = {}
+    for phase, reviews in buckets.items():
+        if not reviews:
+            continue
+        dates = [r.get("reviewed_at", "")[:10] for r in reviews if r.get("reviewed_at", "")]
+        result[phase] = {
+            "reviews": _weighted_sample(reviews, max_per_phase),
+            "count": len(reviews),
+            "date_from": min(dates)[:10] if dates else "",
+            "date_to": max(dates)[:10] if dates else "",
+        }
+    return result

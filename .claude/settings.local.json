@@ -15,7 +15,8 @@
       "Bash(cmd /c \"cd /d \\\\\"C:\\\\Users\\\\kimjaei\\\\OneDrive - NEXON COMPANY\\\\김재이\\\\99. myproject\\\\Store-Pickaxe\\\\.claude\\\\worktrees\\\\zen-banach-3cf4c1\\\\frontend\\\\\" && npx tsc --noEmit 2>&1\")",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
-      "Bash(cp \"C:\\\\Users\\\\kimjaei\\\\OneDrive - NEXON COMPANY\\\\김재이\\\\99. myproject\\\\Store-Pickaxe\\\\frontend\\\\app\\\\icon.png\" \"C:\\\\Users\\\\kimjaei\\\\OneDrive - NEXON COMPANY\\\\김재이\\\\99. myproject\\\\Store-Pickaxe\\\\.claude\\\\worktrees\\\\zen-banach-3cf4c1\\\\frontend\\\\app\\\\icon.png\" && echo \"ok\")"
+      "Bash(cp \"C:\\\\Users\\\\kimjaei\\\\OneDrive - NEXON COMPANY\\\\김재이\\\\99. myproject\\\\Store-Pickaxe\\\\frontend\\\\app\\\\icon.png\" \"C:\\\\Users\\\\kimjaei\\\\OneDrive - NEXON COMPANY\\\\김재이\\\\99. myproject\\\\Store-Pickaxe\\\\.claude\\\\worktrees\\\\zen-banach-3cf4c1\\\\frontend\\\\app\\\\icon.png\" && echo \"ok\")",
+      "Bash(git commit -m 'fix: ANALYSIS range A:N→A:P, cache TTL 120→30s, map sample_date fields *)"
     ]
   }
 }

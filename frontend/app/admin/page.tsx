@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, RefreshCw, Trash2, AlertTriangle, Sparkles, Download, RotateCcw } from "lucide-react";
+import { Lock, RefreshCw, Trash2, AlertTriangle, Sparkles, Download, RotateCcw, Calendar, Check } from "lucide-react";
 import type { AppMeta } from "@/lib/types";
 
 export default function AdminPage() {
@@ -13,6 +13,8 @@ export default function AdminPage() {
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [releaseDateEditing, setReleaseDateEditing] = useState<string | null>(null);
+  const [releaseDateValue, setReleaseDateValue] = useState("");
 
   async function handleLogin() {
     setAuthError("");
@@ -42,6 +44,29 @@ export default function AdminPage() {
       setApps(data.apps || []);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function saveReleaseDate(app_key: string) {
+    setBusyKey(app_key);
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_release_date", app_key, release_date: releaseDateValue, password }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setActionMsg({ ok: true, text: "출시일이 저장되었습니다." });
+        setReleaseDateEditing(null);
+        loadApps();
+      } else {
+        setActionMsg({ ok: false, text: data.error || "저장 실패" });
+      }
+    } catch {
+      setActionMsg({ ok: false, text: "네트워크 오류" });
+    } finally {
+      setBusyKey(null);
     }
   }
 
@@ -285,6 +310,46 @@ export default function AdminPage() {
                         <InfoCell label="Apple 평점" value={app.apple_rating ? `★ ${Number(app.apple_rating).toFixed(1)}` : "—"} />
                         <InfoCell label="마지막 수집" value={formatDate(app.last_collected_at) || "—"} />
                         <InfoCell label="마지막 분석" value={formatDate(app.last_analyzed_at) || "—"} />
+                      </div>
+
+                      {/* 출시일 */}
+                      <div className="mt-3 flex items-center gap-2">
+                        <Calendar size={12} style={{ color: "#9CA3AF", flexShrink: 0 }} />
+                        {releaseDateEditing === app.app_key ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="date"
+                              className="neo-input text-xs py-1"
+                              value={releaseDateValue}
+                              onChange={(e) => setReleaseDateValue(e.target.value)}
+                            />
+                            <button
+                              className="neo-button text-xs"
+                              style={{ background: "#1A1A1A", color: "#FFFFFF" }}
+                              disabled={isBusy}
+                              onClick={() => saveReleaseDate(app.app_key)}
+                            >
+                              <Check size={12} /> 저장
+                            </button>
+                            <button
+                              className="neo-button text-xs"
+                              onClick={() => setReleaseDateEditing(null)}
+                            >
+                              취소
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            className="text-xs hover:underline"
+                            style={{ color: "#9CA3AF" }}
+                            onClick={() => {
+                              setReleaseDateEditing(app.app_key);
+                              setReleaseDateValue(app.release_date || "");
+                            }}
+                          >
+                            출시일: {app.release_date ? formatDate(app.release_date) : "미설정 (클릭하여 입력)"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

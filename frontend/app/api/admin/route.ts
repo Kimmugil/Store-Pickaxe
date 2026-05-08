@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { getAllAppsDirect, getAdminPassword, updateAppField, deleteAppFromMaster } from "@/lib/sheets";
+import { getAllAppsDirect, getAdminPassword, updateAppField, deleteAppFromMaster, updateReleaseDateInMaster } from "@/lib/sheets";
 
 async function verifyPassword(body: Record<string, unknown>): Promise<boolean> {
   const submitted = String(body.password ?? "");
@@ -76,6 +76,13 @@ export async function POST(req: NextRequest) {
 
       case "delete_app": {
         await deleteAppFromMaster(app_key);
+        revalidateTag("all-apps");
+        return NextResponse.json({ ok: true });
+      }
+
+      case "update_release_date": {
+        const release_date = String(body.release_date ?? "").trim();
+        await updateReleaseDateInMaster(app_key, release_date);
         revalidateTag("all-apps");
         return NextResponse.json({ ok: true });
       }

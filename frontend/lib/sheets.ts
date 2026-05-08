@@ -67,13 +67,13 @@ const MASTER_HEADERS = [
   "google_review_count", "apple_review_count",
   "status", "spreadsheet_id",
   "registered_at", "last_collected_at", "last_analyzed_at",
-  "pending_analysis",
+  "pending_analysis", "release_date",
 ];
 
 export const getAllApps = unstable_cache(
   async (): Promise<AppMeta[]> => {
     try {
-      const rows = await readRange(MASTER_ID(), "MASTER!A:P");
+      const rows = await readRange(MASTER_ID(), "MASTER!A:Q");
       return rowsToRecords<Record<string, string>>(rows).map(normalizeApp);
     } catch {
       return [];
@@ -85,7 +85,7 @@ export const getAllApps = unstable_cache(
 
 export async function getAllAppsDirect(): Promise<AppMeta[]> {
   try {
-    const rows = await readRange(MASTER_ID(), "MASTER!A:P");
+    const rows = await readRange(MASTER_ID(), "MASTER!A:Q");
     return rowsToRecords<Record<string, string>>(rows).map(normalizeApp);
   } catch {
     return [];
@@ -95,6 +95,10 @@ export async function getAllAppsDirect(): Promise<AppMeta[]> {
 export async function getAppByKeyDirect(appKey: string): Promise<AppMeta | null> {
   const all = await getAllAppsDirect();
   return all.find((a) => a.app_key === appKey) ?? null;
+}
+
+export async function updateReleaseDateInMaster(appKey: string, releaseDate: string): Promise<void> {
+  await updateAppField(appKey, "release_date", releaseDate);
 }
 
 export const getConfigValues = unstable_cache(
@@ -154,7 +158,7 @@ export const getCollectionLogs = unstable_cache(
 export const getAppAnalyses = unstable_cache(
   async (spreadsheetId: string): Promise<Analysis[]> => {
     try {
-      const rows = await readRange(spreadsheetId, "ANALYSIS!A:P");
+      const rows = await readRange(spreadsheetId, "ANALYSIS!A:S");
       return rowsToRecords<Record<string, string>>(rows).map(normalizeAnalysis);
     } catch {
       return [];
@@ -287,6 +291,7 @@ function normalizeApp(r: Record<string, string>): AppMeta {
     last_collected_at: r.last_collected_at ?? "",
     last_analyzed_at: r.last_analyzed_at ?? "",
     pending_analysis: r.pending_analysis?.toUpperCase() === "TRUE",
+    release_date: r.release_date ?? "",
   };
 }
 
@@ -305,6 +310,10 @@ function normalizeAnalysis(r: Record<string, string>): Analysis {
   const safeParse = (s: string): string[] => {
     try { return JSON.parse(s.replace(/'/g, '"')); } catch { return []; }
   };
+  const safeParsePhase = (s: string) => {
+    if (!s) return null;
+    try { return JSON.parse(s); } catch { return null; }
+  };
   return {
     analysis_id: r.analysis_id ?? "",
     created_at: r.created_at ?? "",
@@ -322,5 +331,8 @@ function normalizeAnalysis(r: Record<string, string>): Analysis {
     sample_count_apple: parseInt(r.sample_count_apple) || 0,
     sample_date_min: r.sample_date_min ?? "",
     sample_date_max: r.sample_date_max ?? "",
+    google_phase_launch: safeParsePhase(r.google_phase_launch),
+    google_phase_growth: safeParsePhase(r.google_phase_growth),
+    google_phase_stable: safeParsePhase(r.google_phase_stable),
   };
 }

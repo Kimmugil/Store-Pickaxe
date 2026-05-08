@@ -25,14 +25,26 @@ def analyze(
     apple_reviews: list[dict],
     mode: str,
     review_scope: str,
+    same_period_google: list[dict] | None = None,
+    phases: dict | None = None,
+    release_date: str = "",
 ) -> dict:
+    """
+    Args:
+        google_reviews: 전체 Google 샘플 (긍정도/키워드/종합 요약 기반)
+        apple_reviews:  전체 Apple 샘플
+        same_period_google: Apple과 동기간 Google 샘플 (platform_diff 기반)
+        phases: {"launch": {reviews, count, date_from, date_to}, ...} (시기별 분석)
+        release_date: 출시일 (YYYY-MM-DD)
+    """
     g_count = len(google_reviews)
     a_count = len(apple_reviews)
 
     if g_count == 0 and a_count == 0:
         raise ValueError("분석할 리뷰가 없습니다.")
 
-    prompt = _build_prompt(google_reviews, apple_reviews, review_scope)
+    prompt = _build_prompt(google_reviews, apple_reviews, review_scope,
+                           same_period_google or [], phases or {}, release_date)
     result = _call_gemini(prompt)
 
     result["mode"] = mode
@@ -41,48 +53,112 @@ def analyze(
     result["sample_count_apple"] = a_count
     result["created_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+    # 시기별 결과에 count/date_from/date_to 메타데이터 병합
+    for phase_key in ("launch", "growth", "stable"):
+        field = f"google_phase_{phase_key}"
+        phase_meta = (phases or {}).get(phase_key, {})
+        summary_val = result.get(field)
+        if summary_val and phase_meta:
+            result[field] = json.dumps({
+                "summary": summary_val if isinstance(summary_val, str) else "",
+                "count": phase_meta.get("count", 0),
+                "date_from": phase_meta.get("date_from", ""),
+                "date_to": phase_meta.get("date_to", ""),
+            }, ensure_ascii=False)
+        else:
+            result[field] = ""
+
     return result
 
 
-def _build_prompt(google_reviews: list[dict], apple_reviews: list[dict], review_scope: str) -> str:
-    def fmt(r: dict, platform: str) -> str:
-        rating = r.get("rating", "?")
-        content = (r.get("content") or "").strip()[:400]
-        title = r.get("title", "")
-        if title:
-            content = f"[{title}] {content}"
-        ver = r.get("app_version", "")
-        suffix = f" (v{ver})" if ver else ""
-        return f"  [{platform} ★{rating}] {content}{suffix}"
+def _fmt_review(r: dict, platform: str) -> str:
+    rating = r.get("rating", "?")
+    content = (r.get("content") or "").strip()[:350]
+    title = r.get("title", "")
+    if title:
+        content = f"[{title}] {content}"
+    ver = r.get("app_version", "")
+    date = (r.get("reviewed_at", "") or "")[:10]
+    suffix = f" ({date})" if date else ""
+    return f"  [{platform} ★{rating}]{suffix} {content}"
 
-    lines = [fmt(r, "Google") for r in google_reviews] + [fmt(r, "Apple") for r in apple_reviews]
-    all_reviews = "\n".join(lines)
+
+def _build_prompt(
+    google_reviews: list[dict],
+    apple_reviews: list[dict],
+    review_scope: str,
+    same_period_google: list[dict],
+    phases: dict,
+    release_date: str,
+) -> str:
+    g_lines = [_fmt_review(r, "Google") for r in google_reviews]
+    a_lines = [_fmt_review(r, "Apple") for r in apple_reviews]
+    all_reviews = "\n".join(g_lines + a_lines)
 
     has_apple = len(apple_reviews) > 0
+    has_same_period = len(same_period_google) > 0 and has_apple
+    has_phases = bool(phases)
 
-    platform_diff_instruction = (
-        '"platform_diff": "Google Play와 App Store 반응의 주요 차이점 (없으면 빈 문자열)"'
-        if has_apple
-        else '"platform_diff": ""'
-    )
+    # ── 동기간 비교 섹션 ──
+    if has_same_period:
+        sp_lines = [_fmt_review(r, "Google") for r in same_period_google] + a_lines
+        same_period_section = f"""
 
-    return f"""당신은 모바일 게임 리뷰 분석 전문가입니다.
-아래는 [{review_scope}] 기간의 실제 사용자 리뷰 샘플입니다.
-(Google Play {len(google_reviews)}개 + App Store {len(apple_reviews)}개)
+## 동기간 플랫폼 비교 리뷰 (Google {len(same_period_google)}개 + Apple {len(apple_reviews)}개)
+※ App Store는 최근 약 500건만 수집 가능합니다. 공정한 비교를 위해 Apple 수집 기간과 동일한 Google Play 리뷰만 사용합니다.
+{chr(10).join(sp_lines)}"""
+        platform_diff_instruction = '"platform_diff": "동기간 리뷰 비교 기반 주요 차이점 (한 문단, 없으면 빈 문자열)"'
+    else:
+        same_period_section = ""
+        platform_diff_instruction = '"platform_diff": ""'
 
-{all_reviews}
+    # ── 시기별 분석 섹션 ──
+    if has_phases:
+        phase_labels = {
+            "launch": "출시 초반 (0~90일)",
+            "growth": "성장기 (91~365일)",
+            "stable": "안정기 (365일+)",
+        }
+        phase_parts = []
+        for pk, label in phase_labels.items():
+            pd = phases.get(pk)
+            if pd:
+                lines = [_fmt_review(r, "Google") for r in pd["reviews"]]
+                phase_parts.append(
+                    f"### {label} ({pd['count']}건, {pd['date_from']} ~ {pd['date_to']})\n" + "\n".join(lines)
+                )
+        phases_section = f"""
 
-위 리뷰를 분석하여 다음 JSON 형식으로 정확하게 응답하세요.
+## Google Play 시기별 리뷰 (출시일: {release_date})
+{"(출시 초반/성장기/안정기 순서로 유저 반응이 어떻게 변화했는지 파악하세요.)" if phase_parts else ""}
+{chr(10).join(phase_parts)}"""
+        phase_instructions = """  "google_phase_launch": "출시 초반 트렌드 한 줄 요약 (데이터 없으면 null)",
+  "google_phase_growth": "성장기 트렌드 한 줄 요약 (데이터 없으면 null)",
+  "google_phase_stable": "안정기 트렌드 한 줄 요약 (데이터 없으면 null)","""
+    else:
+        phases_section = ""
+        phase_instructions = """  "google_phase_launch": null,
+  "google_phase_growth": null,
+  "google_phase_stable": null,"""
+
+    return f"""당신은 모바일 게임 리뷰 분석 전문가입니다. 한국어로 응답하세요.
+
+## 전체 리뷰 샘플 [{review_scope}] (Google {len(google_reviews)}개 + Apple {len(apple_reviews)}개)
+(이 섹션을 기반으로 overall_summary, main_complaints, main_praises, 긍정도, 키워드를 분석합니다.)
+{all_reviews}{same_period_section}{phases_section}
+
+위 데이터를 분석하여 다음 JSON 형식으로 정확하게 응답하세요:
 
 {{
-  "overall_summary": "한 문장으로 핵심 상황 요약 (100자 이내)",
+  "overall_summary": "전체 리뷰 기반 핵심 상황 (100자 이내)",
   "main_complaints": ["주요 불만 1 (30자 이내)", "주요 불만 2", "주요 불만 3"],
   "main_praises": ["주요 칭찬 1 (30자 이내)", "주요 칭찬 2", "주요 칭찬 3"],
-  "google_sentiment": 정수 0~100 (Google 긍정도, 리뷰 없으면 null),
-  "apple_sentiment": 정수 0~100 (Apple 긍정도, 리뷰 없으면 null),
+  "google_sentiment": 정수 0~100 (전체 Google 샘플 기반 긍정도, 없으면 null),
+  "apple_sentiment": 정수 0~100 (전체 Apple 샘플 기반 긍정도, 없으면 null),
   "keywords_google": ["키워드1", "키워드2", "키워드3", "키워드4", "키워드5"],
   "keywords_apple": ["키워드1", "키워드2", "키워드3", "키워드4", "키워드5"],
-  {platform_diff_instruction}
+  {platform_diff_instruction},
+{phase_instructions}
 }}"""
 
 

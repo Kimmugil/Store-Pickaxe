@@ -25,6 +25,7 @@ MASTER_HEADERS = [
     "spreadsheet_id",
     "registered_at", "last_collected_at", "last_analyzed_at",
     "pending_analysis", # TRUE | FALSE
+    "release_date",     # YYYY-MM-DD (선택), Google 시기별 분석 기준
 ]
 
 

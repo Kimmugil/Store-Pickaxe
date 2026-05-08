@@ -19,6 +19,7 @@ export interface AppMeta {
   last_collected_at: string;
   last_analyzed_at: string;
   pending_analysis: boolean;
+  release_date?: string;
 }
 
 export interface CollectionLog {
@@ -28,6 +29,13 @@ export interface CollectionLog {
   apple_added: number;
   google_rating: string;
   apple_rating: string;
+}
+
+export interface PhaseData {
+  summary: string;
+  count: number;
+  date_from: string;
+  date_to: string;
 }
 
 export interface Analysis {
@@ -47,6 +55,9 @@ export interface Analysis {
   sample_count_apple: number;
   sample_date_min?: string;
   sample_date_max?: string;
+  google_phase_launch?: PhaseData | null;
+  google_phase_growth?: PhaseData | null;
+  google_phase_stable?: PhaseData | null;
 }
 
 export interface Review {

@@ -7,8 +7,10 @@
 
 동작:
   1. 전체 수집 리뷰에서 평점 분포 균형 샘플링
-  2. Gemini 호출 → 결과 저장 (새 UUID로 추가, 기존 분석 이력 유지)
-  3. pending_analysis=FALSE 로 변경
+  2. Apple과 동기간 Google 리뷰 별도 샘플링 (플랫폼 비교용)
+  3. 출시일이 있으면 Google 리뷰 시기별 분할 (launch/growth/stable)
+  4. Gemini 호출 → 결과 저장 (새 UUID로 추가, 기존 분석 이력 유지)
+  5. pending_analysis=FALSE 로 변경
 """
 import os
 import sys
@@ -32,16 +34,18 @@ log = logging.getLogger(__name__)
 def process_app(app: dict) -> None:
     app_key = app["app_key"]
     ss_id = app.get("spreadsheet_id", "")
+    release_date = app.get("release_date", "").strip()
 
     if not ss_id:
         log.error(f"[{app_key}] spreadsheet_id 없음")
         return
 
-    log.info(f"[{app_key}] 분석 시작")
+    log.info(f"[{app_key}] 분석 시작 (출시일: {release_date or '미설정'})")
 
     google_reviews = asheet.get_google_reviews(ss_id)
     apple_reviews = asheet.get_apple_reviews(ss_id)
 
+    # 전체 샘플 (종합 분석용)
     g_sample, a_sample, date_min, date_max = sampler.sample_for_analysis(google_reviews, apple_reviews)
 
     total_sample = len(g_sample) + len(a_sample)
@@ -52,9 +56,32 @@ def process_app(app: dict) -> None:
         master.set_pending_analysis(app_key, False)
         return
 
-    log.info(f"[{app_key}] 샘플: Google {len(g_sample)}개 + Apple {len(a_sample)}개 ({date_min} ~ {date_max})")
+    log.info(f"[{app_key}] 전체 샘플: Google {len(g_sample)}개 + Apple {len(a_sample)}개 ({date_min} ~ {date_max})")
 
-    result = gemini.analyze(g_sample, a_sample, mode="onboarding", review_scope="전체 수집 리뷰")
+    # 동기간 플랫폼 비교 샘플 (Apple 수집 기간 = Google 필터 기간)
+    sp_google, apple_date_from, apple_date_to = sampler.sample_platform_comparison(
+        google_reviews, apple_reviews
+    )
+    if sp_google:
+        log.info(f"[{app_key}] 동기간 Google 샘플: {len(sp_google)}개 ({apple_date_from} ~ {apple_date_to})")
+    else:
+        log.info(f"[{app_key}] Apple 리뷰 없음 — 플랫폼 비교 생략")
+
+    # 시기별 분할 (출시일 있을 때만)
+    phases: dict = {}
+    if release_date:
+        phases = sampler.sample_phases(google_reviews, release_date)
+        for pk, pd in phases.items():
+            log.info(f"[{app_key}] 시기별 {pk}: {pd['count']}건 ({pd['date_from']} ~ {pd['date_to']}), 샘플 {len(pd['reviews'])}개")
+
+    result = gemini.analyze(
+        g_sample, a_sample,
+        mode="onboarding",
+        review_scope="전체 수집 리뷰",
+        same_period_google=sp_google,
+        phases=phases,
+        release_date=release_date,
+    )
     result["sample_date_min"] = date_min
     result["sample_date_max"] = date_max
 
