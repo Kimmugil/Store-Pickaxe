@@ -58,6 +58,18 @@ def _weighted_sample(reviews: list[dict], target: int) -> list[dict]:
     return sampled
 
 
+def calc_sentiment(reviews: list[dict]) -> int | None:
+    """
+    실제 평점 분포 기반 긍정도 (0-100). AI 추측 대신 하드 데이터 사용.
+    5★=1.0 / 4★=0.75 / 3★=0.5 / 2★=0.25 / 1★=0.0 가중 평균.
+    """
+    if not reviews:
+        return None
+    weights = {5: 1.0, 4: 0.75, 3: 0.5, 2: 0.25, 1: 0.0}
+    total = sum(weights.get(int(r.get("rating", 3)), 0.5) for r in reviews)
+    return round(total / len(reviews) * 100)
+
+
 def sample_for_analysis(
     google_reviews: list[dict],
     apple_reviews: list[dict],
@@ -113,6 +125,11 @@ def sample_platform_comparison(
     return sample, apple_date_from, apple_date_to
 
 
+_PHASE_MIN_REVIEWS = 30   # 단계당 최소 리뷰 수. 미달 시 해당 단계 분석 스킵.
+_PHASE_LAUNCH_DAYS = 30   # 출시 초반: 0~30일
+_PHASE_GROWTH_DAYS = 180  # 성장기: 31~180일 / 안정기: 181일+
+
+
 def sample_phases(
     google_reviews: list[dict],
     release_date: str,
@@ -120,12 +137,15 @@ def sample_phases(
 ) -> dict[str, dict]:
     """
     출시일 기준 Google 리뷰 3단계 분할 샘플링.
+    - 출시 초반: 0~30일
+    - 성장기: 31~180일
+    - 안정기: 181일+
+    각 단계 30건 미만이면 스킵 (의미 없는 분석 방지).
     Returns: {
       "launch": {"reviews": [...], "count": N, "date_from": str, "date_to": str},
       "growth": {...},
       "stable": {...},
     }
-    빈 단계는 포함되지 않음.
     """
     if not release_date:
         return {}
@@ -149,17 +169,17 @@ def sample_phases(
         days = (rv_date - release).days
         if days < 0:
             continue
-        elif days <= 90:
+        elif days <= _PHASE_LAUNCH_DAYS:
             buckets["launch"].append(r)
-        elif days <= 365:
+        elif days <= _PHASE_GROWTH_DAYS:
             buckets["growth"].append(r)
         else:
             buckets["stable"].append(r)
 
     result = {}
     for phase, reviews in buckets.items():
-        if not reviews:
-            continue
+        if len(reviews) < _PHASE_MIN_REVIEWS:
+            continue  # 데이터 부족 — 스킵
         dates = [r.get("reviewed_at", "")[:10] for r in reviews if r.get("reviewed_at", "")]
         result[phase] = {
             "reviews": _weighted_sample(reviews, max_per_phase),

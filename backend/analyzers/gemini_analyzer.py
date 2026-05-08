@@ -1,5 +1,12 @@
 """
 Gemini AI 분석 엔진
+
+sentiment(긍정도)는 AI에게 묻지 않고 실제 평점 분포에서 계산 (sampler.calc_sentiment).
+Gemini는 텍스트 해석이 필요한 항목만 담당:
+  - overall_summary, main_complaints, main_praises
+  - keywords (구체적 이슈 토픽 한정)
+  - platform_diff (구조화된 플랫폼별 차이)
+  - google_phase_* (시기별 트렌드 요약)
 """
 import json
 import logging
@@ -31,11 +38,13 @@ def analyze(
 ) -> dict:
     """
     Args:
-        google_reviews: 전체 Google 샘플 (긍정도/키워드/종합 요약 기반)
+        google_reviews: 전체 Google 샘플 (종합 요약/불만/칭찬/키워드 기반)
         apple_reviews:  전체 Apple 샘플
         same_period_google: Apple과 동기간 Google 샘플 (platform_diff 기반)
         phases: {"launch": {reviews, count, date_from, date_to}, ...} (시기별 분석)
         release_date: 출시일 (YYYY-MM-DD)
+    Returns:
+        dict — sentiment 필드 없음 (caller가 calc_sentiment로 직접 계산해서 주입)
     """
     g_count = len(google_reviews)
     a_count = len(apple_reviews)
@@ -43,8 +52,10 @@ def analyze(
     if g_count == 0 and a_count == 0:
         raise ValueError("분석할 리뷰가 없습니다.")
 
-    prompt = _build_prompt(google_reviews, apple_reviews, review_scope,
-                           same_period_google or [], phases or {}, release_date)
+    prompt = _build_prompt(
+        google_reviews, apple_reviews, review_scope,
+        same_period_google or [], phases or {}, release_date,
+    )
     result = _call_gemini(prompt)
 
     result["mode"] = mode
@@ -53,7 +64,18 @@ def analyze(
     result["sample_count_apple"] = a_count
     result["created_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # 시기별 결과에 count/date_from/date_to 메타데이터 병합
+    # platform_diff 구조화: {google_specific, apple_specific} → JSON 직렬화
+    g_diff = result.pop("platform_diff_google", []) or []
+    a_diff = result.pop("platform_diff_apple", []) or []
+    if g_diff or a_diff:
+        result["platform_diff"] = json.dumps(
+            {"google_specific": g_diff, "apple_specific": a_diff},
+            ensure_ascii=False,
+        )
+    else:
+        result["platform_diff"] = ""
+
+    # 시기별 결과에 count/date 메타데이터 병합
     for phase_key in ("launch", "growth", "stable"):
         field = f"google_phase_{phase_key}"
         phase_meta = (phases or {}).get(phase_key, {})
@@ -77,7 +99,6 @@ def _fmt_review(r: dict, platform: str) -> str:
     title = r.get("title", "")
     if title:
         content = f"[{title}] {content}"
-    ver = r.get("app_version", "")
     date = (r.get("reviewed_at", "") or "")[:10]
     suffix = f" ({date})" if date else ""
     return f"  [{platform} ★{rating}]{suffix} {content}"
@@ -105,19 +126,23 @@ def _build_prompt(
         same_period_section = f"""
 
 ## 동기간 플랫폼 비교 리뷰 (Google {len(same_period_google)}개 + Apple {len(apple_reviews)}개)
-※ App Store는 최근 약 500건만 수집 가능합니다. 공정한 비교를 위해 Apple 수집 기간과 동일한 Google Play 리뷰만 사용합니다.
+※ App Store는 최근 약 500건만 수집 가능합니다. Apple 수집 기간과 동일한 Google Play 리뷰만 사용합니다.
 {chr(10).join(sp_lines)}"""
-        platform_diff_instruction = '"platform_diff": "동기간 리뷰 비교 기반 주요 차이점 (한 문단, 없으면 빈 문자열)"'
+        platform_diff_instruction = '''\
+  "platform_diff_google": ["Google Play에서만 두드러지는 이슈/불만 (2~3개, 없으면 [])"],
+  "platform_diff_apple": ["App Store에서만 두드러지는 이슈/불만 (2~3개, 없으면 [])"],'''
     else:
         same_period_section = ""
-        platform_diff_instruction = '"platform_diff": ""'
+        platform_diff_instruction = '''\
+  "platform_diff_google": [],
+  "platform_diff_apple": [],'''
 
     # ── 시기별 분석 섹션 ──
     if has_phases:
         phase_labels = {
-            "launch": "출시 초반 (0~90일)",
-            "growth": "성장기 (91~365일)",
-            "stable": "안정기 (365일+)",
+            "launch": "출시 초반 (0~30일)",
+            "growth": "성장기 (31~180일)",
+            "stable": "안정기 (181일+)",
         }
         phase_parts = []
         for pk, label in phase_labels.items():
@@ -125,26 +150,28 @@ def _build_prompt(
             if pd:
                 lines = [_fmt_review(r, "Google") for r in pd["reviews"]]
                 phase_parts.append(
-                    f"### {label} ({pd['count']}건, {pd['date_from']} ~ {pd['date_to']})\n" + "\n".join(lines)
+                    f"### {label} ({pd['count']}건, {pd['date_from']} ~ {pd['date_to']})\n"
+                    + "\n".join(lines)
                 )
-        phases_section = f"""
-
-## Google Play 시기별 리뷰 (출시일: {release_date})
-{"(출시 초반/성장기/안정기 순서로 유저 반응이 어떻게 변화했는지 파악하세요.)" if phase_parts else ""}
-{chr(10).join(phase_parts)}"""
-        phase_instructions = """  "google_phase_launch": "출시 초반 트렌드 한 줄 요약 (데이터 없으면 null)",
-  "google_phase_growth": "성장기 트렌드 한 줄 요약 (데이터 없으면 null)",
-  "google_phase_stable": "안정기 트렌드 한 줄 요약 (데이터 없으면 null)","""
+        phases_section = (
+            f"\n\n## Google Play 시기별 리뷰 (출시일: {release_date})\n"
+            + "\n".join(phase_parts)
+        )
+        phase_instructions = '''\
+  "google_phase_launch": "출시 초반 핵심 트렌드 한 줄 (데이터 없으면 null)",
+  "google_phase_growth": "성장기 핵심 트렌드 한 줄 (데이터 없으면 null)",
+  "google_phase_stable": "안정기 핵심 트렌드 한 줄 (데이터 없으면 null)",'''
     else:
         phases_section = ""
-        phase_instructions = """  "google_phase_launch": null,
+        phase_instructions = '''\
+  "google_phase_launch": null,
   "google_phase_growth": null,
-  "google_phase_stable": null,"""
+  "google_phase_stable": null,'''
 
     return f"""당신은 모바일 게임 리뷰 분석 전문가입니다. 한국어로 응답하세요.
 
 ## 전체 리뷰 샘플 [{review_scope}] (Google {len(google_reviews)}개 + Apple {len(apple_reviews)}개)
-(이 섹션을 기반으로 overall_summary, main_complaints, main_praises, 긍정도, 키워드를 분석합니다.)
+(overall_summary, main_complaints, main_praises, keywords 분석 기반)
 {all_reviews}{same_period_section}{phases_section}
 
 위 데이터를 분석하여 다음 JSON 형식으로 정확하게 응답하세요:
@@ -153,11 +180,9 @@ def _build_prompt(
   "overall_summary": "전체 리뷰 기반 핵심 상황 (100자 이내)",
   "main_complaints": ["주요 불만 1 (30자 이내)", "주요 불만 2", "주요 불만 3"],
   "main_praises": ["주요 칭찬 1 (30자 이내)", "주요 칭찬 2", "주요 칭찬 3"],
-  "google_sentiment": 정수 0~100 (전체 Google 샘플 기반 긍정도, 없으면 null),
-  "apple_sentiment": 정수 0~100 (전체 Apple 샘플 기반 긍정도, 없으면 null),
-  "keywords_google": ["키워드1", "키워드2", "키워드3", "키워드4", "키워드5"],
-  "keywords_apple": ["키워드1", "키워드2", "키워드3", "키워드4", "키워드5"],
-  {platform_diff_instruction},
+  "keywords_google": ["불만·칭찬을 대표하는 구체적 이슈 토픽 5개. '게임'·'재미'·'레벨' 같은 일반 단어 제외. 예: '과금유도', '서버불안정', '밸런스붕괴'"],
+  "keywords_apple": ["동일 기준, App Store 리뷰 기반 5개"],
+{platform_diff_instruction}
 {phase_instructions}
 }}"""
 
@@ -180,7 +205,7 @@ def _call_gemini(prompt: str) -> dict:
             text = response.text or ""
             return json.loads(text)
         except json.JSONDecodeError as exc:
-            log.error(f"Gemini JSON 파싱 실패 (response_mime_type=json 임에도): {text[:500]}")
+            log.error(f"Gemini JSON 파싱 실패: {text[:500]}")
             raise RuntimeError(f"Gemini 응답 파싱 실패: {exc}") from exc
         except Exception as exc:
             last_exc = exc

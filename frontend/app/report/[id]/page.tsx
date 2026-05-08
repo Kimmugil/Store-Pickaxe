@@ -358,20 +358,82 @@ function PlatformTab({
       </div>
 
       {/* 플랫폼 간 주요 차이 */}
-      {analysis.platform_diff && analysis.platform_diff.trim() && (
-        <div className="rounded-xl p-5 space-y-2" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="text-sm font-bold" style={{ color: "#1A1A1A" }}>플랫폼 간 주요 차이</h3>
-            <span className="text-xs flex-shrink-0 px-2 py-0.5 rounded-full font-medium"
-              style={{ background: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE" }}>
-              동기간 비교
-            </span>
-          </div>
-          <p className="text-xs leading-relaxed" style={{ color: "#9CA3AF" }}>
-            App Store 수집 기간({analysis.sample_date_min} ~ {analysis.sample_date_max})과 동일 기간의 Google Play 리뷰를 대상으로 비교한 결과입니다.
-          </p>
-          <p className="text-sm leading-relaxed" style={{ color: "#4A4A4A" }}>{analysis.platform_diff}</p>
+      <PlatformDiffCard platformDiff={analysis.platform_diff} sampleDateMin={analysis.sample_date_min} sampleDateMax={analysis.sample_date_max} />
+    </div>
+  );
+}
+
+// ─── 플랫폼 차이 카드 ────────────────────────────────────────────
+
+function PlatformDiffCard({
+  platformDiff, sampleDateMin, sampleDateMax,
+}: {
+  platformDiff: string;
+  sampleDateMin?: string;
+  sampleDateMax?: string;
+}) {
+  if (!platformDiff?.trim()) return null;
+
+  // 구조화된 JSON 파싱 시도 (신규 형식)
+  let structured: { google_specific?: string[]; apple_specific?: string[] } | null = null;
+  try {
+    const parsed = JSON.parse(platformDiff);
+    if (parsed.google_specific !== undefined || parsed.apple_specific !== undefined) {
+      structured = parsed;
+    }
+  } catch { /* 구형 텍스트 형식 처리 */ }
+
+  const hasContent = structured
+    ? (structured.google_specific?.length || 0) + (structured.apple_specific?.length || 0) > 0
+    : true;
+
+  if (!hasContent) return null;
+
+  return (
+    <div className="rounded-xl p-5 space-y-3" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-sm font-bold" style={{ color: "#1A1A1A" }}>플랫폼 간 주요 차이</h3>
+        <span className="text-xs flex-shrink-0 px-2 py-0.5 rounded-full font-medium"
+          style={{ background: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE" }}>
+          동기간 비교
+        </span>
+      </div>
+      {sampleDateMin && sampleDateMax && (
+        <p className="text-xs" style={{ color: "#C4C4C4" }}>
+          {sampleDateMin} ~ {sampleDateMax} 기간 기준
+        </p>
+      )}
+      {structured ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {structured.google_specific && structured.google_specific.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold" style={{ color: "#4285F4" }}>Google Play 고유 이슈</p>
+              <ul className="space-y-1">
+                {structured.google_specific.map((item, i) => (
+                  <li key={i} className="flex items-start gap-1.5 text-xs" style={{ color: "#4A4A4A" }}>
+                    <span className="flex-shrink-0 mt-0.5" style={{ color: "#4285F4" }}>—</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {structured.apple_specific && structured.apple_specific.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold" style={{ color: "#1A1A1A" }}>App Store 고유 이슈</p>
+              <ul className="space-y-1">
+                {structured.apple_specific.map((item, i) => (
+                  <li key={i} className="flex items-start gap-1.5 text-xs" style={{ color: "#4A4A4A" }}>
+                    <span className="flex-shrink-0 mt-0.5" style={{ color: "#9CA3AF" }}>—</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
+      ) : (
+        <p className="text-sm leading-relaxed" style={{ color: "#4A4A4A" }}>{platformDiff}</p>
       )}
     </div>
   );

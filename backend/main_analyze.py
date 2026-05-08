@@ -21,6 +21,7 @@ from backend import config as cfg
 from backend.sheets import master_sheet as master
 from backend.sheets import app_sheet as asheet
 from backend.analyzers import sampler
+from backend.analyzers.sampler import calc_sentiment
 from backend.analyzers import gemini_analyzer as gemini
 
 logging.basicConfig(
@@ -74,6 +75,11 @@ def process_app(app: dict) -> None:
         for pk, pd in phases.items():
             log.info(f"[{app_key}] 시기별 {pk}: {pd['count']}건 ({pd['date_from']} ~ {pd['date_to']}), 샘플 {len(pd['reviews'])}개")
 
+    # sentiment: AI 추측이 아닌 전체 수집 리뷰의 실제 평점 분포에서 계산
+    google_sentiment = calc_sentiment(google_reviews)
+    apple_sentiment = calc_sentiment(apple_reviews)
+    log.info(f"[{app_key}] 긍정도 계산 — Google {google_sentiment}% / Apple {apple_sentiment}%")
+
     result = gemini.analyze(
         g_sample, a_sample,
         mode="onboarding",
@@ -82,6 +88,8 @@ def process_app(app: dict) -> None:
         phases=phases,
         release_date=release_date,
     )
+    result["google_sentiment"] = google_sentiment
+    result["apple_sentiment"] = apple_sentiment
     result["sample_date_min"] = date_min
     result["sample_date_max"] = date_max
 
