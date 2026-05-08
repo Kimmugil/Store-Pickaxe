@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, RefreshCw, Trash2, AlertTriangle, Sparkles, Pause, Play, Download } from "lucide-react";
+import { Lock, RefreshCw, Trash2, AlertTriangle, Sparkles, Download, RotateCcw } from "lucide-react";
 import type { AppMeta } from "@/lib/types";
 
 export default function AdminPage() {
@@ -105,7 +105,7 @@ export default function AdminPage() {
   }
 
   const pendingApps = apps.filter((a) => a.pending_analysis);
-  const allApps = apps.filter((a) => a.status === "active" || a.status === "paused");
+  const allApps = apps;
 
   return (
     <div className="space-y-8">
@@ -269,16 +269,6 @@ export default function AdminPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-black" style={{ color: "#1A1A1A" }}>{app.app_name}</span>
-                        <span
-                          className="text-xs font-bold px-2 py-0.5 rounded-full"
-                          style={{
-                            background: app.status === "active" ? "#D1FAE5" : "#F0EFEC",
-                            border: "1.5px solid #1A1A1A",
-                            color: app.status === "active" ? "#065F46" : "#4A4A4A",
-                          }}
-                        >
-                          {app.status === "active" ? "활성" : "중지"}
-                        </span>
                         {app.pending_analysis && (
                           <span
                             className="text-xs font-bold px-2 py-0.5 rounded-full"
@@ -328,24 +318,16 @@ export default function AdminPage() {
                       </button>
                     )}
 
-                    {/* 활성/중지 */}
-                    {app.status === "active" ? (
-                      <button
-                        className="neo-button text-xs"
-                        disabled={isBusy}
-                        onClick={() => doAction("pause", app.app_key, `'${app.app_name}' 스케줄 중지`)}
-                      >
-                        <Pause size={12} /> 스케줄 중지
-                      </button>
-                    ) : (
-                      <button
-                        className="neo-button text-xs"
-                        disabled={isBusy}
-                        onClick={() => doAction("activate", app.app_key, `'${app.app_name}' 활성화`)}
-                      >
-                        <Play size={12} /> 활성화
-                      </button>
-                    )}
+                    {/* AI 재분석 */}
+                    <button
+                      className="neo-button text-xs"
+                      disabled={isBusy}
+                      onClick={() => doAction("reanalyze", app.app_key, `'${app.app_name}' AI 재분석`)}
+                      title="분석 실패 시 재실행 — 새로운 항목으로 추가됩니다"
+                    >
+                      <RotateCcw size={12} /> AI 재분석
+                    </button>
+
 
                     <div className="ml-auto">
                       {isDeleting ? (
