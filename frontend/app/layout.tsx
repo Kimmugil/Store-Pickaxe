@@ -28,8 +28,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/" className="font-black text-base" style={{ color: "#1A1A1A", letterSpacing: "-0.02em" }}>
                 ⛏ Store Pickaxe
               </Link>
-              <Link href="/" className="text-sm font-bold" style={{ color: "#1A1A1A", opacity: 0.6 }}>
-                앱 목록
+              <Link href="/dashboard" className="text-sm font-bold" style={{ color: "#1A1A1A", opacity: 0.6 }}>
+                대시보드
               </Link>
             </div>
             <Link href="/admin" className="text-xs font-bold" style={{ color: "#9CA3AF" }}>
