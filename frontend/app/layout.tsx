@@ -21,16 +21,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             height: "56px",
           }}
         >
-          <div
-            className="max-w-5xl mx-auto px-4 h-full flex items-center justify-between"
-          >
+          <div className="max-w-5xl mx-auto px-4 h-full flex items-center justify-between">
             <div className="flex items-center gap-6">
               <Link href="/" className="font-black text-base" style={{ color: "#1A1A1A", letterSpacing: "-0.02em" }}>
                 ⛏ Store Pickaxe
               </Link>
-              <Link href="/dashboard" className="text-sm font-bold" style={{ color: "#1A1A1A", opacity: 0.6 }}>
-                대시보드
-              </Link>
+              <div className="flex items-center gap-4">
+                <Link
+                  href="/"
+                  className="flex items-center gap-1.5 text-sm font-bold"
+                  style={{ color: "#1A1A1A" }}
+                >
+                  <span style={{ fontSize: 14 }}>🏠</span> 홈
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-1.5 text-sm font-bold"
+                  style={{ color: "#1A1A1A", opacity: 0.6 }}
+                >
+                  <span style={{ fontSize: 14 }}>📋</span> 리스트
+                </Link>
+              </div>
             </div>
             <Link href="/admin" className="text-xs font-bold" style={{ color: "#9CA3AF" }}>
               관리자

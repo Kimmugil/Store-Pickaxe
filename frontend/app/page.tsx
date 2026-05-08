@@ -5,16 +5,17 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Search, CheckCircle, ArrowRight, Zap, ChevronRight } from "lucide-react";
-import type { SearchResult, MatchSuggestion, AppMeta } from "@/lib/types";
+import type { SearchResult, MatchSuggestion, AppMeta, Analysis } from "@/lib/types";
 import { formatRating } from "@/lib/utils";
 
 type Step = "idle" | "loading" | "confirm" | "done";
+type EnrichedApp = { app: AppMeta; latestAnalysis: Analysis | null };
 
 export default function HomePage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("idle");
   const [query, setQuery] = useState("");
-  const [recentApps, setRecentApps] = useState<AppMeta[]>([]);
+  const [recentApps, setRecentApps] = useState<EnrichedApp[]>([]);
 
   const [googleResults, setGoogleResults] = useState<SearchResult[]>([]);
   const [appleResults, setAppleResults] = useState<SearchResult[]>([]);
@@ -29,7 +30,7 @@ export default function HomePage() {
   useEffect(() => {
     fetch("/api/apps")
       .then((r) => r.ok ? r.json() : [])
-      .then(setRecentApps)
+      .then((data) => setRecentApps(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
 
@@ -110,11 +111,14 @@ export default function HomePage() {
   const hasSelection = selectedGoogle || selectedApple;
 
   return (
-    <div className="space-y-12 pb-28">
-      {/* 히어로 + 검색 */}
-      <div className="text-center space-y-6 pt-8">
+    <div className="pb-28">
+      {/* ── 히어로 + 검색 (뷰포트 중앙) ─────────────────────────── */}
+      <div
+        className="flex flex-col items-center justify-center text-center gap-5"
+        style={{ minHeight: "calc(100vh - 56px - 320px)" }}
+      >
         <div className="space-y-3">
-          <h1 className="font-black text-4xl" style={{ color: "#1A1A1A", letterSpacing: "-0.04em" }}>
+          <h1 className="font-black text-4xl sm:text-5xl" style={{ color: "#1A1A1A", letterSpacing: "-0.04em" }}>
             모바일 게임 리뷰{" "}
             <span
               className="px-2"
@@ -128,7 +132,8 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="max-w-xl mx-auto">
+        {/* 검색창 */}
+        <div className="w-full max-w-xl">
           <div className="neo-input-wrap">
             <Search size={16} color="#9CA3AF" />
             <input
@@ -155,13 +160,15 @@ export default function HomePage() {
               {error}
             </p>
           )}
+          <p className="mt-2 text-xs" style={{ color: "#9CA3AF" }}>
+            수집과 분석에 수 분이 소요됩니다
+          </p>
         </div>
       </div>
 
-      {/* 검색 결과 */}
+      {/* ── 검색 결과 ────────────────────────────────────────────── */}
       {step === "confirm" && (
-        <div className="max-w-4xl mx-auto space-y-6">
-          {/* 자동 매칭 제안 */}
+        <div className="max-w-4xl mx-auto space-y-6 mt-4">
           {suggestions.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
@@ -214,7 +221,6 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* 직접 선택 */}
           <div>
             <div className="flex items-center gap-2 mb-4">
               <h2 className="font-black text-sm" style={{ color: "#1A1A1A" }}>
@@ -225,25 +231,21 @@ export default function HomePage() {
               </span>
             </div>
             <div className="grid grid-cols-2 gap-5">
-              <ResultColumn
-                title="구글 플레이" results={googleResults} platform="google"
-                selected={selectedGoogle} onSelect={setSelectedGoogle} color="#4285F4"
-              />
-              <ResultColumn
-                title="앱 스토어" results={appleResults} platform="apple"
-                selected={selectedApple} onSelect={setSelectedApple} color="#1A1A1A"
-              />
+              <ResultColumn title="구글 플레이" results={googleResults} platform="google"
+                selected={selectedGoogle} onSelect={setSelectedGoogle} color="#4285F4" />
+              <ResultColumn title="앱 스토어" results={appleResults} platform="apple"
+                selected={selectedApple} onSelect={setSelectedApple} color="#1A1A1A" />
             </div>
           </div>
         </div>
       )}
 
-      {/* 등록된 게임 미리보기 (idle 상태) */}
+      {/* ── 최근 등록 게임 카로셀 (idle 상태) ───────────────────── */}
       {step === "idle" && recentApps.length > 0 && (
-        <div className="space-y-4">
+        <div className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-black text-base" style={{ color: "#1A1A1A" }}>
-              등록된 게임{" "}
+              최근 등록된 게임{" "}
               <span
                 className="px-2 py-0.5 rounded-xl text-sm"
                 style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
@@ -255,49 +257,20 @@ export default function HomePage() {
               전체 보기 <ChevronRight size={12} />
             </Link>
           </div>
+
+          {/* 가로 스크롤 카로셀 */}
           <div
-            className="grid gap-4"
-            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}
+            className="flex gap-4 overflow-x-auto pb-4"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
-            {recentApps.slice(0, 6).map((app) => (
-              <Link key={app.app_key} href={`/${app.app_key}`} className="block card-hover p-4 space-y-3">
-                <div className="flex items-center gap-3">
-                  {app.icon_url ? (
-                    <img
-                      src={app.icon_url} alt={app.app_name} width={40} height={40}
-                      className="rounded-xl flex-shrink-0" style={{ border: "2px solid #1A1A1A" }}
-                    />
-                  ) : (
-                    <div
-                      className="flex-shrink-0 rounded-xl flex items-center justify-center font-black"
-                      style={{ width: 40, height: 40, background: "#F0EFEC", border: "2px solid #1A1A1A" }}
-                    >
-                      🎮
-                    </div>
-                  )}
-                  <span className="font-black text-sm truncate" style={{ color: "#1A1A1A" }}>
-                    {app.app_name}
-                  </span>
-                </div>
-                <div className="flex gap-3 flex-wrap">
-                  {app.google_rating && (
-                    <span className="text-xs font-bold" style={{ color: "#4285F4" }}>
-                      G ★{Number(app.google_rating).toFixed(1)}
-                    </span>
-                  )}
-                  {app.apple_rating && (
-                    <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
-                      A ★{Number(app.apple_rating).toFixed(1)}
-                    </span>
-                  )}
-                </div>
-              </Link>
+            {recentApps.map(({ app, latestAnalysis }) => (
+              <RecentCard key={app.app_key} app={app} analysis={latestAnalysis} />
             ))}
           </div>
         </div>
       )}
 
-      {/* 등록 바 (게임 선택 후 하단 고정) */}
+      {/* ── 등록 바 ──────────────────────────────────────────────── */}
       {hasSelection && (
         <div className="fixed bottom-0 left-0 right-0 z-40 p-4">
           <div
@@ -339,6 +312,103 @@ export default function HomePage() {
   );
 }
 
+// ── 카로셀 카드 ───────────────────────────────────────────────────
+
+function RecentCard({ app, analysis }: { app: AppMeta; analysis: Analysis | null }) {
+  const sentiment = analysis
+    ? Math.round(((analysis.google_sentiment ?? 0) + (analysis.apple_sentiment ?? 0)) /
+        ([analysis.google_sentiment, analysis.apple_sentiment].filter((v) => v !== null).length || 1))
+    : null;
+
+  return (
+    <Link
+      href={`/${app.app_key}`}
+      className="flex-shrink-0 card-hover overflow-hidden"
+      style={{ width: 260 }}
+    >
+      {/* 헤더 */}
+      <div className="p-4" style={{ borderBottom: "2px solid #1A1A1A" }}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            {app.icon_url ? (
+              <img
+                src={app.icon_url} alt={app.app_name} width={44} height={44}
+                className="rounded-xl flex-shrink-0" style={{ border: "2px solid #1A1A1A" }}
+              />
+            ) : (
+              <div
+                className="flex-shrink-0 rounded-xl flex items-center justify-center font-black text-lg"
+                style={{ width: 44, height: 44, background: "#F0EFEC", border: "2px solid #1A1A1A" }}
+              >
+                🎮
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="font-black text-sm truncate" style={{ color: "#1A1A1A" }}>{app.app_name}</p>
+              <p className="text-xs truncate" style={{ color: "#9CA3AF" }}>{app.developer}</p>
+            </div>
+          </div>
+          {sentiment !== null && (
+            <span
+              className={`text-xs font-black px-2 py-0.5 rounded-full flex-shrink-0 ${
+                sentiment >= 60 ? "sentiment-pos" : sentiment >= 40 ? "sentiment-mixed" : "sentiment-neg"
+              }`}
+            >
+              {sentiment >= 60 ? "긍정적" : sentiment >= 40 ? "보통" : "부정적"}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* 요약 */}
+      <div className="px-4 py-3" style={{ minHeight: 72 }}>
+        {analysis?.overall_summary ? (
+          <p
+            className="text-xs leading-relaxed"
+            style={{
+              color: "#4A4A4A",
+              display: "-webkit-box",
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {analysis.overall_summary}
+          </p>
+        ) : (
+          <p className="text-xs" style={{ color: "#9CA3AF" }}>
+            {app.pending_analysis ? "분석 대기중" : "아직 분석 결과가 없습니다"}
+          </p>
+        )}
+      </div>
+
+      {/* 하단 */}
+      <div
+        className="flex items-center justify-between px-4 py-2"
+        style={{ borderTop: "2px solid #1A1A1A", background: "#FAFAFA" }}
+      >
+        <div className="flex gap-2">
+          {app.google_rating && (
+            <span className="text-xs font-bold" style={{ color: "#4285F4" }}>
+              G ★{Number(app.google_rating).toFixed(1)}
+            </span>
+          )}
+          {app.apple_rating && (
+            <span className="text-xs font-bold" style={{ color: "#1A1A1A" }}>
+              A ★{Number(app.apple_rating).toFixed(1)}
+            </span>
+          )}
+        </div>
+        {analysis?.created_at && (
+          <span className="text-xs" style={{ color: "#9CA3AF" }}>
+            {formatDate(analysis.created_at)}
+          </span>
+        )}
+      </div>
+    </Link>
+  );
+}
+
 // ── 서브 컴포넌트 ─────────────────────────────────────────────────
 
 function ResultColumn({
@@ -355,10 +425,8 @@ function ResultColumn({
     <div className="space-y-2">
       <h3 className="font-black text-sm" style={{ color }}>{title}</h3>
       {results.length === 0 ? (
-        <div
-          className="flex items-center justify-center py-10 rounded-2xl"
-          style={{ border: "2px dashed #E2E8F0", background: "#FAFAFA" }}
-        >
+        <div className="flex items-center justify-center py-10 rounded-2xl"
+          style={{ border: "2px dashed #E2E8F0", background: "#FAFAFA" }}>
           <p className="text-xs font-medium" style={{ color: "#9CA3AF" }}>결과 없음</p>
         </div>
       ) : (
@@ -371,7 +439,7 @@ function ResultColumn({
             <div
               key={key}
               onClick={() => onSelect(isSelected ? null : r)}
-              className="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all"
+              className="flex items-center gap-3 p-3 rounded-xl cursor-pointer"
               style={
                 isSelected
                   ? { background: "#FFFDE7", border: "2px solid #1A1A1A", boxShadow: "2px 2px 0px 0px #1A1A1A" }
@@ -399,16 +467,11 @@ function ResultColumn({
 function AppThumbnail({ result, small = false }: { result: SearchResult; small?: boolean }) {
   const size = small ? 24 : 40;
   return result.icon_url ? (
-    <Image
-      src={result.icon_url} alt={result.name} width={size} height={size}
-      className="rounded-xl flex-shrink-0"
-      style={{ border: "1.5px solid #1A1A1A" }} unoptimized
-    />
+    <Image src={result.icon_url} alt={result.name} width={size} height={size}
+      className="rounded-xl flex-shrink-0" style={{ border: "1.5px solid #1A1A1A" }} unoptimized />
   ) : (
-    <div
-      style={{ width: size, height: size, background: "#F0EFEC", border: "1.5px solid #1A1A1A" }}
-      className="rounded-xl flex-shrink-0"
-    />
+    <div style={{ width: size, height: size, background: "#F0EFEC", border: "1.5px solid #1A1A1A" }}
+      className="rounded-xl flex-shrink-0" />
   );
 }
 
@@ -418,10 +481,16 @@ function ConfidenceBadge({ score, confidence }: { score: number; confidence: str
     medium: { background: "#FFFDE7", color: "#B7960A", border: "1.5px solid #B7960A" },
     low:    { background: "#F0EFEC", color: "#9CA3AF", border: "1.5px solid #9CA3AF" },
   };
-  const s = styleMap[confidence] || styleMap.low;
   return (
-    <span className="text-xs font-black px-2 py-0.5 rounded-full" style={s}>
+    <span className="text-xs font-black px-2 py-0.5 rounded-full"
+      style={styleMap[confidence] || styleMap.low}>
       {score}%
     </span>
   );
+}
+
+function formatDate(iso: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
 }
