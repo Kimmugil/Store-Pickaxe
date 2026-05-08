@@ -50,9 +50,9 @@ export default function GuidePage() {
       <Section title="리포트 보기">
         <p>각 분석은 독립적인 스냅샷으로 저장됩니다. 앱 상세 페이지에서 날짜별 리포트를 선택해 볼 수 있으며, 탭으로 구성됩니다.</p>
         <ul className="space-y-2 mt-3">
-          <Li><strong>📊 종합 요약</strong> — 긍정도 바, 불만·칭찬 목록</Li>
-          <Li><strong>📱 플랫폼 비교</strong> — Google vs Apple 나란히</Li>
-          <Li><strong>📝 리뷰 목록</strong> — 플랫폼 전환 + 별점 필터</Li>
+          <Li><strong>종합 요약</strong> — 긍정도 바, 불만·칭찬 목록</Li>
+          <Li><strong>플랫폼 비교</strong> — Google vs Apple 나란히</Li>
+          <Li><strong>리뷰 목록</strong> — 플랫폼 전환 + 별점 필터</Li>
         </ul>
       </Section>
     </div>

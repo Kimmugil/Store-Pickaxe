@@ -44,7 +44,7 @@ export default async function DashboardPage() {
           className="flex flex-col items-center justify-center py-24 rounded-2xl gap-4"
           style={{ border: "2px dashed #1A1A1A", background: "#FFFFFF" }}
         >
-          <span className="text-5xl">⛏</span>
+
           <div className="text-center">
             <p className="font-black text-lg" style={{ color: "#1A1A1A" }}>등록된 게임이 없습니다</p>
             <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>홈에서 게임을 검색해 추가하세요</p>
@@ -97,7 +97,7 @@ function AppCard({
             className="flex-shrink-0 rounded-xl flex items-center justify-center font-black text-xl"
             style={{ width: 56, height: 56, background: "#F0EFEC", border: "2px solid #1A1A1A" }}
           >
-            🎮
+            {app.app_name.charAt(0)}
           </div>
         )}
         <div className="flex-1 min-w-0">

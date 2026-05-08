@@ -181,7 +181,7 @@ export default function AdminPage() {
                       className="flex-shrink-0 rounded-xl flex items-center justify-center font-black"
                       style={{ width: 48, height: 48, background: "#F0EFEC", border: "2px solid #1A1A1A" }}
                     >
-                      🎮
+                      {app.app_name.charAt(0)}
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
@@ -263,7 +263,7 @@ export default function AdminPage() {
                         className="flex-shrink-0 rounded-xl flex items-center justify-center font-black"
                         style={{ width: 48, height: 48, background: "#F0EFEC", border: "2px solid #1A1A1A" }}
                       >
-                        🎮
+                        {app.app_name.charAt(0)}
                       </div>
                     )}
                     <div className="flex-1 min-w-0">

@@ -92,7 +92,7 @@ export default function AppDetailPage() {
               className="flex-shrink-0 rounded-2xl flex items-center justify-center font-black text-2xl"
               style={{ width: 72, height: 72, background: "#F0EFEC", border: "2px solid #1A1A1A" }}
             >
-              🎮
+              {meta.app_name.charAt(0)}
             </div>
           )}
           <div className="flex-1 min-w-0">

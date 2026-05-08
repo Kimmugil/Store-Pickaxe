@@ -84,11 +84,9 @@ export default function HomePage() {
     return (
       <div className="max-w-md mx-auto text-center py-24 space-y-6">
         <div
-          className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center text-3xl"
+          className="w-16 h-16 rounded-2xl mx-auto"
           style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
-        >
-          ✓
-        </div>
+        />
         <div>
           <h2 className="font-black text-2xl" style={{ color: "#1A1A1A" }}>등록 완료!</h2>
           <p className="text-sm mt-2" style={{ color: "#4A4A4A" }}>
@@ -120,12 +118,7 @@ export default function HomePage() {
         <div className="space-y-3">
           <h1 className="font-black text-4xl sm:text-5xl" style={{ color: "#1A1A1A", letterSpacing: "-0.04em" }}>
             모바일 게임 리뷰{" "}
-            <span
-              className="px-2"
-              style={{ background: "#FFD600", border: "2px solid #1A1A1A", borderRadius: 4 }}
-            >
-              한눈에
-            </span>
+            <span style={{ background: "#FFD600" }}>한눈에</span>
           </h1>
           <p className="text-base font-medium" style={{ color: "#9CA3AF" }}>
             Google Play & App Store 리뷰를 수집하고 AI로 분석합니다
@@ -340,7 +333,7 @@ function RecentCard({ app, analysis }: { app: AppMeta; analysis: Analysis | null
                 className="flex-shrink-0 rounded-xl flex items-center justify-center font-black text-lg"
                 style={{ width: 44, height: 44, background: "#F0EFEC", border: "2px solid #1A1A1A" }}
               >
-                🎮
+                {app.app_name.charAt(0)}
               </div>
             )}
             <div className="min-w-0">

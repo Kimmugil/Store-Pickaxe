@@ -87,14 +87,14 @@ function ReportContent() {
         {/* AI 한줄평 */}
         <div className="px-6 py-4" style={{ background: "#FFFDE7" }}>
           <p className="text-sm italic leading-relaxed" style={{ color: "#1A1A1A" }}>
-            💬 {analysis.overall_summary}
+            {analysis.overall_summary}
           </p>
         </div>
       </div>
 
       {/* 탭 */}
       <div className="tab-nav">
-        {([["summary", "📊 종합 요약"], ["platform", "📱 플랫폼 비교"], ["reviews", "📝 리뷰 목록"]] as [Tab, string][]).map(([tab, label]) => (
+        {([["summary", "종합 요약"], ["platform", "플랫폼 비교"], ["reviews", "리뷰 목록"]] as [Tab, string][]).map(([tab, label]) => (
           <button
             key={tab}
             className={`tab-item ${activeTab === tab ? "active" : ""}`}
@@ -352,7 +352,7 @@ function ReviewsTab({
               )}
               <p className="text-sm leading-relaxed" style={{ color: "#4A4A4A" }}>{review.content}</p>
               {(review.thumbs_up ?? 0) > 0 && (
-                <p className="text-xs" style={{ color: "#9CA3AF" }}>👍 {review.thumbs_up}</p>
+                <p className="text-xs" style={{ color: "#9CA3AF" }}>도움됨 {review.thumbs_up}</p>
               )}
             </div>
           ))

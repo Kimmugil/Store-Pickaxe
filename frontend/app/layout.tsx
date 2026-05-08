@@ -24,22 +24,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="max-w-5xl mx-auto px-4 h-full flex items-center justify-between">
             <div className="flex items-center gap-6">
               <Link href="/" className="font-black text-base" style={{ color: "#1A1A1A", letterSpacing: "-0.02em" }}>
-                ⛏ Store Pickaxe
+                Store Pickaxe
               </Link>
               <div className="flex items-center gap-4">
-                <Link
-                  href="/"
-                  className="flex items-center gap-1.5 text-sm font-bold"
-                  style={{ color: "#1A1A1A" }}
-                >
-                  <span style={{ fontSize: 14 }}>🏠</span> 홈
+                <Link href="/" className="text-sm font-bold" style={{ color: "#1A1A1A" }}>
+                  홈
                 </Link>
-                <Link
-                  href="/dashboard"
-                  className="flex items-center gap-1.5 text-sm font-bold"
-                  style={{ color: "#1A1A1A", opacity: 0.6 }}
-                >
-                  <span style={{ fontSize: 14 }}>📋</span> 리스트
+                <Link href="/dashboard" className="text-sm font-bold" style={{ color: "#1A1A1A", opacity: 0.6 }}>
+                  리스트
                 </Link>
               </div>
             </div>
