@@ -222,6 +222,41 @@ export async function getAppReviewsOldest(spreadsheetId: string, limit = 200): P
   }
 }
 
+export async function getGoogleReviewsByDateRange(
+  spreadsheetId: string,
+  dateFrom: string,
+  dateTo: string,
+  limit = 5,
+): Promise<Review[]> {
+  try {
+    const rows = await readRange(spreadsheetId, "GOOGLE_REVIEWS!A:G");
+    if (rows.length < 2) return [];
+    const records = rowsToRecords<Record<string, string>>(rows);
+    return records
+      .filter((r) => {
+        const d = (r.reviewed_at || "").slice(0, 10);
+        return d >= dateFrom && d <= dateTo && (r.content || "").length >= 20;
+      })
+      .map((r) => ({
+        review_id: r.review_id ?? "",
+        rating: parseInt(r.rating) || 0,
+        content: r.content ?? "",
+        app_version: r.app_version ?? "",
+        reviewed_at: r.reviewed_at ?? "",
+        thumbs_up: parseInt(r.thumbs_up) || 0,
+        collected_at: r.collected_at ?? "",
+      }) as Review)
+      .sort((a, b) => {
+        const thumbsDiff = (b.thumbs_up ?? 0) - (a.thumbs_up ?? 0);
+        if (thumbsDiff !== 0) return thumbsDiff;
+        return (b.content || "").length - (a.content || "").length;
+      })
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
 export async function getGoogleRatingRows(spreadsheetId: string): Promise<{ rating: number; reviewed_at: string }[]> {
   try {
     const rows = await readRange(spreadsheetId, "GOOGLE_REVIEWS!A:G");
@@ -341,19 +376,26 @@ function normalizeLog(r: Record<string, string>): CollectionLog {
 
 function normalizeAnalysis(r: Record<string, string>): Analysis {
   // 구형(string[]) 또는 신형({title,description}[]) 모두 처리
+  // 한국어 작은따옴표('소환 레벨' 등)가 포함된 경우 replace('/g 적용 시 JSON 파싱 오류 발생
+  // → 원본 그대로 파싱 우선 시도, 실패 시 legacy fallback
   const safeParseItems = (s: string): ComplaintPraise[] => {
-    try {
-      const parsed = JSON.parse(s.replace(/'/g, '"'));
+    const parse = (str: string) => {
+      const parsed = JSON.parse(str);
       if (!Array.isArray(parsed)) return [];
       return parsed.map((item) =>
         typeof item === "string"
           ? { title: item, description: "" }
           : { title: String(item.title ?? ""), description: String(item.description ?? "") }
       );
-    } catch { return []; }
+    };
+    try { return parse(s); } catch {}
+    try { return parse(s.replace(/'/g, '"')); } catch {}
+    return [];
   };
   const safeParse = (s: string): string[] => {
-    try { return JSON.parse(s.replace(/'/g, '"')); } catch { return []; }
+    try { return JSON.parse(s); } catch {}
+    try { return JSON.parse(s.replace(/'/g, '"')); } catch {}
+    return [];
   };
   const safeParsePhase = (s: string) => {
     if (!s) return null;

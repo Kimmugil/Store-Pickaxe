@@ -177,39 +177,50 @@ def sample_phases(
     except ValueError:
         return {}
 
-    filtered = _filter_reviews(google_reviews)
-    buckets: dict[str, list[dict]] = {"launch": [], "growth": [], "stable": []}
-
-    for r in filtered:
+    def _assign_phase(r: dict, target: dict[str, list[dict]]) -> None:
         rv_str = (r.get("reviewed_at", "") or "")[:10]
         if not rv_str:
-            continue
+            return
         try:
             rv_date = _date.fromisoformat(rv_str)
         except ValueError:
-            continue
+            return
         days = (rv_date - release).days
         if days < 0:
-            continue
+            return
         elif days <= _PHASE_LAUNCH_DAYS:
-            buckets["launch"].append(r)
+            target["launch"].append(r)
         elif days <= _PHASE_GROWTH_DAYS:
-            buckets["growth"].append(r)
+            target["growth"].append(r)
         else:
-            buckets["stable"].append(r)
+            target["stable"].append(r)
+
+    # 전체(미필터) 버킷: 정확한 통계 (count, avg_rating, sentiment) 계산용
+    all_buckets: dict[str, list[dict]] = {"launch": [], "growth": [], "stable": []}
+    for r in google_reviews:
+        _assign_phase(r, all_buckets)
+
+    # 필터 버킷: AI 샘플링 품질 (20자 이상 리뷰만)
+    filtered = _filter_reviews(google_reviews)
+    filtered_buckets: dict[str, list[dict]] = {"launch": [], "growth": [], "stable": []}
+    for r in filtered:
+        _assign_phase(r, filtered_buckets)
 
     result = {}
-    for phase, reviews in buckets.items():
-        if len(reviews) < _PHASE_MIN_REVIEWS:
+    for phase in ("launch", "growth", "stable"):
+        all_reviews = all_buckets[phase]
+        filtered_reviews = filtered_buckets[phase]
+        if len(filtered_reviews) < _PHASE_MIN_REVIEWS:
             continue  # 데이터 부족 — 스킵
-        dates = [r.get("reviewed_at", "")[:10] for r in reviews if r.get("reviewed_at", "")]
-        avg_rating = round(sum(int(r.get("rating", 0)) for r in reviews) / len(reviews), 2) if reviews else None
+        dates = [r.get("reviewed_at", "")[:10] for r in all_reviews if r.get("reviewed_at", "")]
+        # avg_rating/sentiment: 전체 리뷰 기반 (내용 길이와 무관하게 평점 전체 반영)
+        avg_rating = round(sum(int(r.get("rating", 0)) for r in all_reviews) / len(all_reviews), 2) if all_reviews else None
         result[phase] = {
-            "reviews": _weighted_sample(reviews, max_per_phase),
-            "count": len(reviews),
+            "reviews": _weighted_sample(filtered_reviews, max_per_phase),
+            "count": len(all_reviews),
             "date_from": min(dates)[:10] if dates else "",
             "date_to": max(dates)[:10] if dates else "",
-            "sentiment": calc_sentiment(reviews),  # 전체 버킷 기반 (샘플 아님)
-            "avg_rating": avg_rating,  # 전체 버킷 기반 평균 평점
+            "sentiment": calc_sentiment(all_reviews),
+            "avg_rating": avg_rating,
         }
     return result
