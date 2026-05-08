@@ -172,7 +172,7 @@ export default function HomePage() {
           <div
             className="fixed inset-0 z-40"
             style={{ background: "rgba(0,0,0,0.5)" }}
-            onClick={step !== "done" ? closeModal : undefined}
+            onClick={closeModal}
           />
 
           {/* 모달 패널 */}
@@ -189,7 +189,7 @@ export default function HomePage() {
                 <span className="font-black text-sm" style={{ color: "#1A1A1A" }}>
                   {step === "done" ? "등록 완료" : step === "loading" ? "검색 중..." : `"${query}" 검색 결과`}
                 </span>
-                {step !== "done" && (
+                {(
                   <button
                     onClick={closeModal}
                     className="rounded-lg p-1 hover:opacity-60 transition-opacity"
@@ -350,8 +350,8 @@ export default function HomePage() {
                     >
                       AI 분석은 관리자 승인 후 자동으로 진행됩니다.
                     </div>
-                    <button onClick={() => router.push(`/${registeredKey}`)} className="neo-button-primary">
-                      상세 보기 <ArrowRight size={14} />
+                    <button onClick={closeModal} className="neo-button-primary">
+                      닫기
                     </button>
                   </div>
                 )}
