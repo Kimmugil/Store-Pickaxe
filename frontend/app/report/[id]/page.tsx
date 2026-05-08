@@ -894,6 +894,40 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
         })()}
       </svg>
 
+      {/* 리뷰 볼륨 막대 그래프 — 평점 추이와 x축 정렬 */}
+      {(() => {
+        const BAR_H = 44;
+        const maxCount = Math.max(...points.map((p) => p.count), 1);
+        const barW = points.length > 1
+          ? Math.max(3, (innerW / (points.length - 1)) * 0.5)
+          : 8;
+        return (
+          <div style={{ marginTop: 2 }}>
+            <p className="text-xs" style={{ color: "#C4C4C4", paddingLeft: PAD_L }}>리뷰 볼륨 (참고)</p>
+            <svg
+              viewBox={`0 0 ${W} ${BAR_H}`}
+              style={{ width: "100%", height: "auto", display: "block" }}
+            >
+              {points.map((p, i) => {
+                const barHeight = Math.max(1, (p.count / maxCount) * (BAR_H - 4));
+                return (
+                  <rect
+                    key={i}
+                    x={p.x - barW / 2}
+                    y={BAR_H - barHeight}
+                    width={barW}
+                    height={barHeight}
+                    fill="#4285F4"
+                    opacity={0.18}
+                    rx={1}
+                  />
+                );
+              })}
+            </svg>
+          </div>
+        );
+      })()}
+
       {/* 범례 */}
       {phaseZones.length > 0 && (
         <div className="flex items-center gap-4 mt-1 justify-center flex-wrap">
