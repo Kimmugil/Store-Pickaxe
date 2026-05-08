@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { Search, CheckCircle, ArrowRight, Zap, ChevronRight } from "lucide-react";
+import { Search, CheckCircle, ArrowRight, Zap, ChevronRight, Check } from "lucide-react";
 import type { SearchResult, MatchSuggestion, AppMeta, Analysis } from "@/lib/types";
 import { formatRating } from "@/lib/utils";
 import { useTexts } from "@/components/TextsProvider";
@@ -86,9 +86,11 @@ export default function HomePage() {
     return (
       <div className="max-w-md mx-auto text-center py-24 space-y-6">
         <div
-          className="w-16 h-16 rounded-2xl mx-auto"
+          className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center"
           style={{ background: "#FFD600", border: "2px solid #1A1A1A" }}
-        />
+        >
+          <Check size={28} color="#1A1A1A" strokeWidth={3} />
+        </div>
         <div>
           <h2 className="font-black text-2xl" style={{ color: "#1A1A1A" }}>등록 완료!</h2>
           <p className="text-sm mt-2" style={{ color: "#4A4A4A" }}>
