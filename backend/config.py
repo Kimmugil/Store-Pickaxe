@@ -77,3 +77,6 @@ def sample_google_count() -> int:
 
 def sample_apple_count() -> int:
     return get_config_int("SAMPLE_APPLE_COUNT", 150)
+
+def daily_ai_limit() -> int:
+    return get_config_int("AI_DAILY_LIMIT", 30)

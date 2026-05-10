@@ -13,6 +13,7 @@ sentiment(긍정도)는 AI에게 묻지 않고 실제 평점 분포에서 계산
 """
 import json
 import logging
+import re
 import time
 from datetime import datetime, timezone
 
@@ -132,7 +133,7 @@ def _analyze_summary(
 위 데이터를 분석하여 다음 JSON 형식으로 정확하게 응답하세요:
 
 {{
-  "overall_summary": "긍정과 부정을 균형있게 담은 전체 유저 반응 요약 (100자 이내). 반드시 칭찬 포인트와 불만 포인트를 모두 포함할 것. 예시: '전투 시스템과 그래픽은 호평이나, 과금 구조와 잦은 오류로 장기 유저 이탈 증가'",
+  "overall_summary": "스토어 리뷰 특성상 불만족 유저가 더 많이 리뷰를 남기는 점을 감안하여, 긍정 측면과 부정 측면을 균형 있게 서술. 반드시 '유저들은 ~을(를) 긍정적으로 평가한다. 반면 ~에 대해서는 부정적으로 평가한다.' 형식으로 작성. 각 측면 50자 이내, 총 110자 이내.",
   "main_complaints": [
     {{"title": "주요 불만 주제 (20자 이내)", "description": "이 불만에 대한 구체적 설명. 어떤 유저들이 왜 불편해하는지 (60자 이내)"}},
     {{"title": "주요 불만 주제 2", "description": "설명 2"}},
@@ -240,6 +241,66 @@ def _analyze_phases(
 
 # ── 공통 유틸 ────────────────────────────────────────────────────
 
+def _repair_json(text: str) -> dict | None:
+    """
+    잘린(truncated) Gemini 응답을 복구 시도.
+    마지막으로 완결된 최상위 JSON 오브젝트를 찾아 파싱.
+    """
+    # 전략 1: 마크다운 코드블록 제거 후 파싱
+    stripped = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        pass
+
+    # 전략 2: JSON 오브젝트 영역 추출 ({...})
+    match = re.search(r"\{.*\}", stripped, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+
+    # 전략 3: 문자열 내 리터럴 줄바꿈 제거 후 파싱
+    cleaned = re.sub(r'(?<=[^\\])\n(?=[^{}\[\]",:]+["\]])', " ", stripped)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # 전략 4: 가장 마지막 완결된 최상위 오브젝트 찾기 (잘린 경우)
+    depth = 0
+    in_string = False
+    escape = False
+    last_complete = -1
+    for i, c in enumerate(stripped):
+        if escape:
+            escape = False
+            continue
+        if c == "\\" and in_string:
+            escape = True
+            continue
+        if c == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                last_complete = i + 1
+                break
+    if last_complete > 0:
+        try:
+            return json.loads(stripped[:last_complete])
+        except json.JSONDecodeError:
+            pass
+
+    return None
+
+
 def _fmt_review(r: dict, platform: str) -> str:
     rating = r.get("rating", "?")
     content = (r.get("content") or "").strip()[:350]
@@ -254,6 +315,7 @@ def _fmt_review(r: dict, platform: str) -> str:
 def _call_gemini(prompt: str) -> dict:
     client = _client()
     last_exc: Exception | None = None
+    text = ""
 
     for attempt, delay in enumerate((*_RETRY_DELAYS, None), start=1):
         try:
@@ -262,15 +324,24 @@ def _call_gemini(prompt: str) -> dict:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.3,
-                    max_output_tokens=8192,
+                    max_output_tokens=16384,   # 8192 → 16384: 긴 응답 잘림 방지
                     response_mime_type="application/json",
                 ),
             )
             text = response.text or ""
-            return json.loads(text)
-        except json.JSONDecodeError as exc:
-            log.error(f"Gemini JSON 파싱 실패: {text[:500]}")
-            raise RuntimeError(f"Gemini 응답 파싱 실패: {exc}") from exc
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                # 1차 파싱 실패 → 복구 시도
+                log.warning(f"Gemini JSON 1차 파싱 실패 (len={len(text)}) — 복구 시도 중")
+                repaired = _repair_json(text)
+                if repaired is not None:
+                    log.info("JSON 복구 성공 (부분 결과 사용)")
+                    return repaired
+                log.error(f"Gemini JSON 복구 실패: {text[:600]}")
+                raise RuntimeError(f"Gemini 응답 JSON 파싱 실패 (복구 불가)")
+        except RuntimeError:
+            raise
         except Exception as exc:
             last_exc = exc
             exc_str = str(exc)

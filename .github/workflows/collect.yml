@@ -45,3 +45,16 @@ jobs:
           APP_KEY: ${{ inputs.app_key }}
           MODE: ${{ inputs.mode }}
         run: python -m backend.main_collect
+
+      - name: AI 분석 자동 트리거
+        if: success()
+        env:
+          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
+        run: |
+          curl -s -o /dev/null -w "HTTP %{http_code}\n" -X POST \
+            -H "Authorization: Bearer $GITHUB_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/analyze.yml/dispatches \
+            -d "{\"ref\":\"${{ github.ref_name }}\",\"inputs\":{\"app_key\":\"${{ inputs.app_key }}\",\"force\":\"false\"}}"

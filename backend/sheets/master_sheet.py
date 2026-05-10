@@ -178,6 +178,57 @@ def get_admin_password() -> str:
     return get_config_values().get("ADMIN_PASSWORD", "")
 
 
+# ─── CONFIG 쓰기 ─────────────────────────────────────────────────
+
+def set_config_value(key: str, value: str) -> None:
+    """CONFIG 탭에서 key 행을 찾아 값을 갱신. 없으면 새 행 추가."""
+    ss = _master_ss()
+    try:
+        ws = ss.worksheet("CONFIG")
+    except gspread.WorksheetNotFound:
+        ws = ss.add_worksheet("CONFIG", rows=100, cols=3)
+        ws.append_row(["key", "value", "description"])
+
+    rows = ws.get_all_values()
+    for i, row in enumerate(rows[1:], start=2):
+        if row and row[0].strip() == key:
+            ws.update_cell(i, 2, value)
+            return
+    ws.append_row([key, value, ""])
+
+
+# ─── AI 일일 사용량 ───────────────────────────────────────────────
+
+def get_daily_ai_usage() -> tuple[str, int]:
+    """오늘 날짜(UTC)와 오늘 AI 분석 사용 횟수를 반환. (date_str, count)"""
+    cfg_vals = get_config_values()
+    stored_date = cfg_vals.get("AI_DAILY_DATE", "")
+    stored_count = cfg_vals.get("AI_DAILY_COUNT", "0") or "0"
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if stored_date != today:
+        return today, 0
+    try:
+        return today, int(stored_count)
+    except ValueError:
+        return today, 0
+
+
+def increment_daily_ai_usage() -> int:
+    """오늘 AI 분석 사용 횟수를 1 증가. 날짜가 바뀌었으면 1부터 시작. 새 값 반환."""
+    today, count = get_daily_ai_usage()
+    new_count = count + 1
+    set_config_value("AI_DAILY_DATE", today)
+    set_config_value("AI_DAILY_COUNT", str(new_count))
+    return new_count
+
+
+def reset_daily_ai_usage() -> None:
+    """오늘 AI 분석 사용 횟수를 0으로 초기화."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    set_config_value("AI_DAILY_DATE", today)
+    set_config_value("AI_DAILY_COUNT", "0")
+
+
 # ─── 헬퍼 ───────────────────────────────────────────────────────
 
 def _now() -> str:

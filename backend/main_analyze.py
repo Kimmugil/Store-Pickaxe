@@ -85,6 +85,15 @@ def process_app(app: dict) -> None:
     apple_rating_dist = calc_rating_dist(apple_reviews)
     log.info(f"[{app_key}] 평점 분포 — Google {google_rating_dist} / Apple {apple_rating_dist}")
 
+    # 일일 AI 분석 한도 체크 (force=True일 때는 건너뜀)
+    force = os.getenv("FORCE", "false").strip().lower() == "true"
+    if not force:
+        limit = cfg.daily_ai_limit()
+        _today, usage = master.get_daily_ai_usage()
+        if usage >= limit:
+            log.warning(f"[{app_key}] 일일 AI 분석 한도 초과 ({usage}/{limit}) — pending_analysis=TRUE 유지")
+            return  # pending_analysis 는 TRUE 그대로 유지
+
     result = gemini.analyze(
         g_sample, a_sample,
         mode="onboarding",
@@ -102,6 +111,10 @@ def process_app(app: dict) -> None:
 
     analysis_id = asheet.save_analysis(ss_id, result)
     log.info(f"[{app_key}] 분석 저장: {analysis_id}")
+
+    # 일일 사용량 증가 (force 여부 무관하게 실제 분석이 완료된 경우에만)
+    new_usage = master.increment_daily_ai_usage()
+    log.info(f"[{app_key}] 일일 AI 분석 사용량: {new_usage}회")
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     master.update_app(app_key, {
