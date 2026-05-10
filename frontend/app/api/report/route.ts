@@ -38,7 +38,10 @@ export async function GET(req: NextRequest) {
     const analysis = analyses.find((a) => a.analysis_id === analysisId);
     if (!analysis) return NextResponse.json({ error: "분석 결과를 찾을 수 없습니다." }, { status: 404 });
 
-    return NextResponse.json({ analysis, meta, google_reviews, apple_reviews });
+    // 이전 리포트 목록 (최신순 정렬, 현재 분석 포함)
+    const allAnalysesSorted = [...analyses].sort((a, b) => (b.created_at > a.created_at ? 1 : -1));
+
+    return NextResponse.json({ analysis, meta, google_reviews, apple_reviews, all_analyses: allAnalysesSorted });
   } catch (e) {
     console.error("[report]", e);
     return NextResponse.json({ error: String(e) }, { status: 500 });

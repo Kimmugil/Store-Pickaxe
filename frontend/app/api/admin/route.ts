@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { getAllAppsDirect, getAdminPassword, updateAppField, deleteAppFromMaster, updateReleaseDateInMaster } from "@/lib/sheets";
+import { getAllAppsDirect, getAdminPassword, updateAppField, deleteAppFromMaster, updateReleaseDateInMaster, getDailyAiUsageDirect, setConfigValueDirect } from "@/lib/sheets";
 
 async function verifyPassword(body: Record<string, unknown>): Promise<boolean> {
   const submitted = String(body.password ?? "");
@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
       }
 
       case "approve_analysis": {
-        await triggerGitHubWorkflow("analyze.yml", { app_key });
+        // force=true: pending_analysis 체크 + 일일 한도 모두 우회하여 즉시 실행
+        await triggerGitHubWorkflow("analyze.yml", { app_key, force: "true" });
         revalidateTag("all-apps");
         return NextResponse.json({ ok: true });
       }
@@ -84,6 +85,24 @@ export async function POST(req: NextRequest) {
         const release_date = String(body.release_date ?? "").trim();
         await updateReleaseDateInMaster(app_key, release_date);
         revalidateTag("all-apps");
+        return NextResponse.json({ ok: true });
+      }
+
+      case "get_daily_limit": {
+        const usage = await getDailyAiUsageDirect();
+        return NextResponse.json({ ok: true, ...usage });
+      }
+
+      case "reset_daily_limit": {
+        const today = new Date().toISOString().slice(0, 10);
+        await setConfigValueDirect("AI_DAILY_DATE", today);
+        await setConfigValueDirect("AI_DAILY_COUNT", "0");
+        return NextResponse.json({ ok: true });
+      }
+
+      case "set_daily_limit": {
+        const newLimit = Math.max(1, parseInt(String(body.limit ?? "30")) || 30);
+        await setConfigValueDirect("AI_DAILY_LIMIT", String(newLimit));
         return NextResponse.json({ ok: true });
       }
 

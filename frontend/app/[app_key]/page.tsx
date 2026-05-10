@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronRight, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, ChevronRight, ExternalLink, ChevronDown, ChevronUp, X } from "lucide-react";
 import type { AppMeta, CollectionLog, Analysis } from "@/lib/types";
 
 interface AppDetailData {
@@ -19,6 +19,8 @@ export default function AppDetailPage() {
   const [data, setData] = useState<AppDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [logsOpen, setLogsOpen] = useState(false);
+  const [limitData, setLimitData] = useState<{ count: number; limit: number } | null>(null);
+  const [limitPopupDismissed, setLimitPopupDismissed] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -30,7 +32,13 @@ export default function AppDetailPage() {
     }
   }
 
-  useEffect(() => { loadData(); }, [appKey]);
+  useEffect(() => {
+    loadData();
+    fetch("/api/daily_limit")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setLimitData({ count: d.count, limit: d.limit }); })
+      .catch(() => {});
+  }, [appKey]);
 
   if (loading) return <SkeletonDetail />;
   if (!data) return (
@@ -42,6 +50,8 @@ export default function AppDetailPage() {
 
   const { meta, logs, analyses } = data;
   const sortedAnalyses = [...analyses].sort((a, b) => (b.created_at > a.created_at ? 1 : -1));
+  const limitExceeded = meta.pending_analysis && sortedAnalyses.length === 0
+    && limitData !== null && limitData.count >= limitData.limit;
 
   function computeAvgFromDist(dist: Record<string, number> | undefined): number | null {
     if (!dist) return null;
@@ -56,6 +66,46 @@ export default function AppDetailPage() {
 
   return (
     <div className="space-y-6">
+      {/* 일일 한도 초과 팝업 */}
+      {limitExceeded && !limitPopupDismissed && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            style={{ background: "rgba(0,0,0,0.4)" }}
+            onClick={() => setLimitPopupDismissed(true)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <div
+              className="w-full max-w-sm rounded-2xl p-6 space-y-4"
+              style={{ background: "#FFFFFF", border: "2px solid #1A1A1A", boxShadow: "6px 6px 0 #1A1A1A" }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-black text-base" style={{ color: "#1A1A1A" }}>분석 대기 중</p>
+                  <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>오늘의 AI 분석 한도가 소진되었습니다</p>
+                </div>
+                <button onClick={() => setLimitPopupDismissed(true)} style={{ color: "#9CA3AF" }}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div
+                className="px-4 py-3 rounded-xl text-sm"
+                style={{ background: "#FEF9C3", border: "1.5px solid #FDE047", color: "#854D0E" }}
+              >
+                오늘 AI 분석이 <strong>{limitData?.count}회</strong> 실행되어 일일 한도({limitData?.limit}회)에 도달했습니다.
+                수집된 리뷰는 준비 완료 상태이며, 내일 자동으로 분석이 진행됩니다.
+              </div>
+              <button
+                className="w-full neo-button justify-center"
+                onClick={() => setLimitPopupDismissed(true)}
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* 뒤로 가기 */}
       <Link href="/" className="inline-flex items-center gap-2 text-sm font-bold" style={{ color: "#9CA3AF" }}>
         <ArrowLeft size={14} />
@@ -163,9 +213,11 @@ export default function AppDetailPage() {
           >
             <p className="text-sm" style={{ color: "#9CA3AF" }}>
               {meta.pending_analysis
-                ? "분석 승인 대기중입니다"
+                ? limitExceeded
+                  ? `오늘 AI 분석 한도(${limitData?.limit}회)가 소진되어 대기 중입니다 — 내일 자동으로 분석됩니다`
+                  : "리뷰 수집 완료 — AI 분석이 곧 자동으로 진행됩니다"
                 : (meta.google_review_count ?? 0) + (meta.apple_review_count ?? 0) > 0
-                ? "리뷰가 수집되었습니다 — 관리자가 분석을 승인하면 결과가 표시됩니다"
+                ? "리뷰가 수집되었습니다 — 분석 결과를 기다리는 중입니다"
                 : "아직 수집된 리뷰가 없습니다"}
             </p>
           </div>

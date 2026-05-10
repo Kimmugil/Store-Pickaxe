@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Lock, RefreshCw, Trash2, AlertTriangle, Sparkles, Download, RotateCcw, Calendar, Check } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Lock, RefreshCw, Trash2, AlertTriangle, Sparkles, Download, RotateCcw, Calendar, Check, Gauge } from "lucide-react";
 import type { AppMeta } from "@/lib/types";
 
 export default function AdminPage() {
@@ -15,6 +15,8 @@ export default function AdminPage() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [releaseDateEditing, setReleaseDateEditing] = useState<string | null>(null);
   const [releaseDateValue, setReleaseDateValue] = useState("");
+  const [dailyUsage, setDailyUsage] = useState<{ count: number; limit: number } | null>(null);
+  const [newLimitValue, setNewLimitValue] = useState("");
 
   async function handleLogin() {
     setAuthError("");
@@ -44,6 +46,65 @@ export default function AdminPage() {
       setApps(data.apps || []);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadDailyUsage() {
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get_daily_limit", password }),
+      });
+      const data = await res.json();
+      if (data.ok) setDailyUsage({ count: data.count, limit: data.limit });
+    } catch { /* ignore */ }
+  }
+
+  async function resetDailyLimit() {
+    setBusyKey("__daily__");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset_daily_limit", password }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setActionMsg({ ok: true, text: "일일 AI 분석 횟수가 초기화되었습니다." });
+        loadDailyUsage();
+      } else {
+        setActionMsg({ ok: false, text: data.error || "초기화 실패" });
+      }
+    } catch {
+      setActionMsg({ ok: false, text: "네트워크 오류" });
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function saveDailyLimit() {
+    const val = parseInt(newLimitValue);
+    if (!val || val < 1) return;
+    setBusyKey("__daily__");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set_daily_limit", limit: val, password }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setActionMsg({ ok: true, text: `일일 AI 분석 한도가 ${val}회로 변경되었습니다.` });
+        setNewLimitValue("");
+        loadDailyUsage();
+      } else {
+        setActionMsg({ ok: false, text: data.error || "변경 실패" });
+      }
+    } catch {
+      setActionMsg({ ok: false, text: "네트워크 오류" });
+    } finally {
+      setBusyKey(null);
     }
   }
 
@@ -93,6 +154,12 @@ export default function AdminPage() {
       setBusyKey(null);
     }
   }
+
+  useEffect(() => {
+    if (authenticated) {
+      loadDailyUsage();
+    }
+  }, [authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!authenticated) {
     return (
@@ -166,12 +233,100 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ── 분석 승인 대기 ───────────────────────── */}
+      {/* ── AI 일일 분석 한도 ───────────────────── */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Gauge size={16} style={{ color: "#1A1A1A" }} />
+          <h2 className="font-black text-base" style={{ color: "#1A1A1A" }}>AI 일일 분석 한도</h2>
+          <button
+            className="ml-auto neo-button text-xs"
+            onClick={loadDailyUsage}
+            disabled={busyKey === "__daily__"}
+          >
+            <RefreshCw size={12} />
+            새로고침
+          </button>
+        </div>
+
+        <div className="card p-5 space-y-4">
+          {dailyUsage ? (
+            <>
+              {/* 사용량 표시 */}
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <div className="flex items-end gap-1 mb-1">
+                    <span className="font-black text-2xl" style={{ color: dailyUsage.count >= dailyUsage.limit ? "#EF4444" : "#1A1A1A" }}>
+                      {dailyUsage.count}
+                    </span>
+                    <span className="text-sm font-medium mb-1" style={{ color: "#9CA3AF" }}>
+                      / {dailyUsage.limit}회 사용
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: "#F0EFEC", border: "1px solid #E2E8F0" }}>
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(100, (dailyUsage.count / dailyUsage.limit) * 100)}%`,
+                        background: dailyUsage.count >= dailyUsage.limit ? "#EF4444" : "#1A1A1A",
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>
+                    {dailyUsage.limit - dailyUsage.count > 0
+                      ? `오늘 ${dailyUsage.limit - dailyUsage.count}회 남음 (UTC 기준 자정에 초기화)`
+                      : "오늘 한도 소진 — 아래에서 초기화하거나 내일 자동 초기화됩니다"}
+                  </p>
+                </div>
+                <button
+                  className="neo-button text-xs flex-shrink-0"
+                  disabled={busyKey === "__daily__"}
+                  onClick={resetDailyLimit}
+                >
+                  <RotateCcw size={12} />
+                  횟수 초기화
+                </button>
+              </div>
+
+              {/* 한도 변경 */}
+              <div
+                className="flex items-center gap-2 pt-3"
+                style={{ borderTop: "1px solid #E2E8F0" }}
+              >
+                <span className="text-xs font-medium flex-shrink-0" style={{ color: "#9CA3AF" }}>한도 변경</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  className="neo-input text-xs py-1"
+                  style={{ width: 80 }}
+                  placeholder={String(dailyUsage.limit)}
+                  value={newLimitValue}
+                  onChange={(e) => setNewLimitValue(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && saveDailyLimit()}
+                />
+                <span className="text-xs" style={{ color: "#9CA3AF" }}>회</span>
+                <button
+                  className="neo-button text-xs"
+                  style={{ background: "#1A1A1A", color: "#FFFFFF" }}
+                  disabled={busyKey === "__daily__" || !newLimitValue}
+                  onClick={saveDailyLimit}
+                >
+                  <Check size={12} /> 저장
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="h-16 rounded-xl animate-pulse" style={{ background: "#F0EFEC" }} />
+          )}
+        </div>
+      </section>
+
+      {/* ── 수동 분석 대기 (일 한도 초과) ────────── */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <Sparkles size={16} style={{ color: "#1A1A1A" }} />
           <h2 className="font-black text-base" style={{ color: "#1A1A1A" }}>
-            분석 승인 대기{" "}
+            수동 분석 대기{" "}
             <span
               className="px-2 py-0.5 rounded-xl text-sm"
               style={{ background: pendingApps.length > 0 ? "#FFD600" : "#F0EFEC", border: "2px solid #1A1A1A" }}
@@ -180,6 +335,9 @@ export default function AdminPage() {
             </span>
           </h2>
         </div>
+        <p className="text-xs" style={{ color: "#9CA3AF" }}>
+          일일 한도 초과로 자동 분석이 보류된 앱입니다. 즉시 분석 버튼을 누르면 한도와 무관하게 바로 실행됩니다.
+        </p>
 
         {pendingApps.length === 0 ? (
           <div
@@ -232,14 +390,14 @@ export default function AdminPage() {
                   <button
                     className="neo-button-primary flex-shrink-0"
                     disabled={busyKey === app.app_key}
-                    onClick={() => doAction("approve_analysis", app.app_key, `'${app.app_name}' 분석 승인`)}
+                    onClick={() => doAction("approve_analysis", app.app_key, `'${app.app_name}' 즉시 분석`)}
                   >
                     {busyKey === app.app_key ? (
                       <RefreshCw size={13} className="animate-spin" />
                     ) : (
                       <Sparkles size={13} />
                     )}
-                    분석 승인
+                    즉시 분석
                   </button>
                 </div>
               </div>

@@ -85,6 +85,9 @@ function AppCard({
 }) {
   const totalReviews = (app.google_review_count ?? 0) + (app.apple_review_count ?? 0);
   const lastLog = logs.at(-1);
+  const reportHref = latestAnalysis?.analysis_id
+    ? `/report/${latestAnalysis.analysis_id}?app_key=${app.app_key}`
+    : `/${app.app_key}`;
 
   const gCollected = computeAvgFromDist(latestAnalysis?.google_rating_dist);
   const aCollected = computeAvgFromDist(latestAnalysis?.apple_rating_dist);
@@ -175,7 +178,7 @@ function AppCard({
           리뷰 {totalReviews.toLocaleString()}건
         </span>
         <Link
-          href={`/${app.app_key}`}
+          href={reportHref}
           className="neo-button"
           style={{ padding: "6px 14px", fontSize: 12 }}
         >
