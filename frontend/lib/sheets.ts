@@ -4,7 +4,7 @@
  */
 import { google } from "googleapis";
 import { unstable_cache } from "next/cache";
-import type { AppMeta, CollectionLog, Analysis, Review, ComplaintPraise } from "./types";
+import type { AppMeta, CollectionLog, Analysis, Review, ComplaintPraise, CategoryData } from "./types";
 
 function getAuth() {
   const raw = process.env.GOOGLE_CREDENTIALS_JSON;
@@ -148,10 +148,12 @@ export async function setConfigValueDirect(key: string, value: string): Promise<
   }
 }
 
-/** 오늘 날짜(UTC)와 AI 분석 사용 횟수/한도를 반환 */
+/** 오늘 날짜(KST)와 AI 분석 사용 횟수/한도를 반환 */
 export async function getDailyAiUsageDirect(): Promise<{ date: string; count: number; limit: number }> {
   const config = await getConfigValuesDirect();
-  const today = new Date().toISOString().slice(0, 10);
+  // KST = UTC+9
+  const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const today = nowKST.toISOString().slice(0, 10);
   const storedDate = config["AI_DAILY_DATE"] ?? "";
   const count = storedDate === today ? (parseInt(config["AI_DAILY_COUNT"] ?? "0") || 0) : 0;
   const limit = parseInt(config["AI_DAILY_LIMIT"] ?? "30") || 30;
@@ -193,7 +195,7 @@ export const getCollectionLogs = unstable_cache(
 export const getAppAnalyses = unstable_cache(
   async (spreadsheetId: string): Promise<Analysis[]> => {
     try {
-      const rows = await readRange(spreadsheetId, "ANALYSIS!A:U");  // A:U (21컬럼)
+      const rows = await readRange(spreadsheetId, "ANALYSIS!A:V");  // A:V (22컬럼, categories 포함)
       return rowsToRecords<Record<string, string>>(rows).map(normalizeAnalysis);
     } catch {
       return [];
@@ -443,6 +445,20 @@ function normalizeAnalysis(r: Record<string, string>): Analysis {
       return (parsed && typeof parsed === "object" && !Array.isArray(parsed)) ? parsed : {};
     } catch { return {}; }
   };
+  const safeParseCategories = (s: string): CategoryData[] => {
+    if (!s) return [];
+    try {
+      const parsed = JSON.parse(s);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (item): item is CategoryData =>
+          typeof item === "object" && item !== null &&
+          typeof item.name === "string" &&
+          typeof item.positive_pct === "number" &&
+          typeof item.negative_pct === "number"
+      );
+    } catch { return []; }
+  };
 
   return {
     analysis_id: r.analysis_id ?? "",
@@ -466,5 +482,6 @@ function normalizeAnalysis(r: Record<string, string>): Analysis {
     google_phase_stable: safeParsePhase(r.google_phase_stable),
     google_rating_dist: safeParseRatingDist(r.google_rating_dist),
     apple_rating_dist: safeParseRatingDist(r.apple_rating_dist),
+    categories: safeParseCategories(r.categories),
   };
 }

@@ -46,6 +46,12 @@ export interface ComplaintPraise {
   description: string;
 }
 
+export interface CategoryData {
+  name: string;         // 카테고리명 (10자 이내)
+  positive_pct: number; // 긍정 비율 (0~100)
+  negative_pct: number; // 부정 비율 (0~100), positive_pct + negative_pct = 100
+}
+
 export interface Analysis {
   analysis_id: string;
   created_at: string;
@@ -68,6 +74,7 @@ export interface Analysis {
   google_phase_stable?: PhaseData | null;
   google_rating_dist?: Record<string, number>;  // 전체 수집 리뷰 평점 분포
   apple_rating_dist?: Record<string, number>;
+  categories?: CategoryData[];  // 카테고리별 긍정/부정 비율
 }
 
 export interface Review {
