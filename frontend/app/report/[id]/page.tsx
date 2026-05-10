@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { ArrowLeft, X, ChevronDown, ChevronUp, Info } from "lucide-react";
-import type { Analysis, Review, AppMeta, PhaseData, ComplaintPraise, CategoryData } from "@/lib/types";
+import type { Analysis, Review, AppMeta, PhaseData, ComplaintPraise } from "@/lib/types";
 
 interface ReportData {
   analysis: Analysis;
@@ -284,9 +284,15 @@ function SummaryTab({
         { label: "주의", value: "별점과 리뷰 내용이 불일치하는 경우가 있습니다 (예: 5★에 불만 내용). AI 분석은 리뷰 텍스트 기준이며 별점은 별도 평점 분포로 확인하세요." },
       ]} />
 
-      {/* 카테고리별 긍정/부정 게이지 */}
-      {analysis.categories && analysis.categories.length > 0 && (
-        <CategoryGaugeSection categories={analysis.categories} />
+      {analysis.main_praises.length > 0 && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-black" style={{ color: "#10B981" }}>주요 긍정 리뷰</h3>
+          <div className="space-y-3">
+            {analysis.main_praises.map((p, i) => (
+              <ComplaintPraiseItem key={i} item={p} type="praise" allReviews={allReviews} />
+            ))}
+          </div>
+        </section>
       )}
 
       {analysis.main_complaints.length > 0 && (
@@ -295,17 +301,6 @@ function SummaryTab({
           <div className="space-y-3">
             {analysis.main_complaints.map((c, i) => (
               <ComplaintPraiseItem key={i} item={c} type="complaint" allReviews={allReviews} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {analysis.main_praises.length > 0 && (
-        <section className="space-y-3">
-          <h3 className="text-sm font-black" style={{ color: "#10B981" }}>주요 긍정 리뷰</h3>
-          <div className="space-y-3">
-            {analysis.main_praises.map((p, i) => (
-              <ComplaintPraiseItem key={i} item={p} type="praise" allReviews={allReviews} />
             ))}
           </div>
         </section>
@@ -1339,44 +1334,6 @@ function PrevReportsDropdown({ analyses, appKey }: { analyses: Analysis[]; appKe
   );
 }
 
-// ─── 카테고리 긍정/부정 게이지 ────────────────────────────────────
-
-function CategoryGaugeSection({ categories }: { categories: CategoryData[] }) {
-  return (
-    <div className="rounded-xl p-5 space-y-4" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
-      <div>
-        <h3 className="text-sm font-black" style={{ color: "#1A1A1A" }}>카테고리별 반응</h3>
-        <p className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>
-          주요 테마별 긍정/부정 비율 · AI 리뷰 분석 기반 추정치
-        </p>
-      </div>
-      <div className="space-y-3">
-        {categories.map((cat, i) => (
-          <div key={i} className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold" style={{ color: "#1A1A1A" }}>{cat.name}</span>
-              <div className="flex items-center gap-2 text-xs">
-                <span style={{ color: "#10B981" }}>긍 {cat.positive_pct}%</span>
-                <span style={{ color: "#E2E8F0" }}>|</span>
-                <span style={{ color: "#EF4444" }}>부 {cat.negative_pct}%</span>
-              </div>
-            </div>
-            <div className="flex h-2 rounded-full overflow-hidden" style={{ background: "#F0EFEC" }}>
-              <div
-                className="rounded-l-full transition-all"
-                style={{ width: `${cat.positive_pct}%`, background: "#10B981", opacity: 0.75 }}
-              />
-              <div
-                className="rounded-r-full transition-all"
-                style={{ width: `${cat.negative_pct}%`, background: "#EF4444", opacity: 0.75 }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 
 function SkeletonReport() {
