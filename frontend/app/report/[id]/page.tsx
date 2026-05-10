@@ -831,19 +831,11 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
     return <p className="text-xs text-center py-8" style={{ color: "#9CA3AF" }}>데이터가 충분하지 않습니다</p>;
   }
 
-  // ── 레이아웃 상수 ────────────────────────────────────────────
-  const W = 520;
-  const PAD_L = 36, PAD_R = 16;
-  const RATING_PAD_T = 20, RATING_PAD_B = 0;
-  const RATING_INNER_H = 150;
-  const RATING_H = RATING_PAD_T + RATING_INNER_H + RATING_PAD_B;
-  const LABEL_H = 24;   // x축 레이블 영역
-  const VOL_H = 44;     // 볼륨 바 전용 영역
-  const VOL_LABEL_H = 12;
-  const BOTTOM_PAD = 8;
-  const TOTAL_H = RATING_H + LABEL_H + VOL_LABEL_H + VOL_H + BOTTOM_PAD;
-
+  // ── 레이아웃 상수 (단일 SVG, 볼륨 바는 차트 내부) ───────────
+  const W = 520, H = 220, PAD_L = 36, PAD_R = 16, PAD_T = 24, PAD_B = 36;
   const innerW = W - PAD_L - PAD_R;
+  const innerH = H - PAD_T - PAD_B;
+  const chartBottom = PAD_T + innerH; // ★1 기준선
 
   function toX(i: number) {
     return sortedMonths.length === 1
@@ -851,14 +843,8 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
       : PAD_L + (i / (sortedMonths.length - 1)) * innerW;
   }
   function toY(rating: number) {
-    return RATING_PAD_T + RATING_INNER_H - ((rating - 1) / 4) * RATING_INNER_H;
+    return PAD_T + innerH - ((rating - 1) / 4) * innerH;
   }
-
-  // y 위치들
-  const xLabelY = RATING_H + LABEL_H - 4;
-  const volLabelY = RATING_H + LABEL_H + VOL_LABEL_H - 2;
-  const volBottom = RATING_H + LABEL_H + VOL_LABEL_H + VOL_H;
-  const ratingBottom = RATING_PAD_T + RATING_INNER_H; // ★1 라인
 
   // 시기 zone 배경
   const phaseZones: { x1: number; x2: number; fill: string; label: string; labelColor: string }[] = [];
@@ -905,23 +891,46 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
 
   const maxCount = Math.max(...points.map((p) => p.count), 1);
   const barW = points.length > 1
-    ? Math.max(4, (innerW / (points.length - 1)) * 0.55)
+    ? Math.max(4, (innerW / (points.length - 1)) * 0.6)
     : 12;
+
+  // 볼륨 바 색상: 파란색 계열(출시 초반)과 겹치지 않는 중성 회색
+  const BAR_COLOR = "#374151";
 
   return (
     <div>
       <svg
-        viewBox={`0 0 ${W} ${TOTAL_H}`}
+        viewBox={`0 0 ${W} ${H}`}
         style={{ width: "100%", height: "auto", display: "block" }}
         onMouseLeave={() => setHoveredIdx(null)}
       >
-        {/* 시기 zone 배경 (rating 영역에만) */}
+        {/* 1. 시기 zone 배경 */}
         {phaseZones.map((zone, i) => (
-          <rect key={i} x={zone.x1} y={RATING_PAD_T} width={zone.x2 - zone.x1} height={RATING_INNER_H}
+          <rect key={i} x={zone.x1} y={PAD_T} width={zone.x2 - zone.x1} height={innerH}
             fill={zone.fill} opacity={0.45} />
         ))}
 
-        {/* Y축 격자 + 레이블 */}
+        {/* 2. 볼륨 바 — 차트 내부, 하단부터 위로, 비례 높이 (평점 라인 뒤에 렌더링) */}
+        {points.map((p, i) => {
+          const barHeight = Math.max(2, (p.count / maxCount) * innerH * 0.82);
+          const barX = Math.max(PAD_L, p.x - barW / 2); // 첫 바 왼쪽 넘침 방지
+          return (
+            <rect
+              key={i}
+              x={barX}
+              y={chartBottom - barHeight}
+              width={barW}
+              height={barHeight}
+              fill={BAR_COLOR}
+              opacity={hoveredIdx === i ? 0.38 : 0.18}
+              rx={2}
+              style={{ cursor: "pointer" }}
+              onMouseEnter={() => setHoveredIdx(i)}
+            />
+          );
+        })}
+
+        {/* 3. Y축 격자 + 레이블 */}
         {[1, 2, 3, 4, 5].map((rating) => {
           const y = toY(rating);
           return (
@@ -932,10 +941,10 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
           );
         })}
 
-        {/* 추이선 */}
+        {/* 4. 추이선 */}
         <path d={linePath} fill="none" stroke="#4285F4" strokeWidth={2} strokeLinejoin="round" />
 
-        {/* 데이터 포인트 */}
+        {/* 5. 데이터 포인트 */}
         {points.map((p, i) => (
           <circle
             key={i}
@@ -947,44 +956,17 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
           />
         ))}
 
-        {/* X축 구분선 */}
-        <line x1={PAD_L} x2={PAD_L + innerW} y1={ratingBottom} y2={ratingBottom} stroke="#E2E8F0" strokeWidth={0.5} />
-
-        {/* X축 레이블 */}
+        {/* 6. X축 레이블 */}
         {labelIndices.map((i) => (
-          <text key={i} x={points[i].x} y={xLabelY} textAnchor="middle" fill="#9CA3AF" fontSize={8}>
+          <text key={i} x={points[i].x} y={H - 6} textAnchor="middle" fill="#9CA3AF" fontSize={8}>
             {points[i].month.slice(2)}
           </text>
         ))}
 
-        {/* 볼륨 바 섹션 구분선 + "리뷰 수" 레이블 */}
-        <line x1={PAD_L} x2={PAD_L + innerW} y1={volLabelY + 4} y2={volLabelY + 4} stroke="#F0EFEC" strokeWidth={1} />
-        <text x={PAD_L - 5} y={volLabelY + 4} textAnchor="end" fill="#C4C4C4" fontSize={8}>리뷰</text>
-
-        {/* 볼륨 바 — 전용 하단 영역, 비례 높이 */}
-        {points.map((p, i) => {
-          const barHeight = Math.max(2, (p.count / maxCount) * VOL_H);
-          const barX = Math.max(PAD_L, p.x - barW / 2);  // 첫 바 왼쪽 넘침 방지
-          return (
-            <rect
-              key={i}
-              x={barX}
-              y={volBottom - barHeight}
-              width={barW}
-              height={barHeight}
-              fill={hoveredIdx === i ? "#1A1A1A" : "#4285F4"}
-              opacity={hoveredIdx === i ? 0.35 : 0.2}
-              rx={1}
-              style={{ cursor: "pointer" }}
-              onMouseEnter={() => setHoveredIdx(i)}
-            />
-          );
-        })}
-
-        {/* 툴팁 */}
+        {/* 7. 툴팁 */}
         {hp !== null && (() => {
           const tx = Math.min(hp.x + 8, W - TW - 4);
-          const ty = Math.max(hp.y - TH - 8, RATING_PAD_T + 2);
+          const ty = Math.max(hp.y - TH - 8, PAD_T + 2);
           return (
             <g>
               <rect x={tx} y={ty} width={TW} height={TH} rx={5} fill="#1A1A1A" opacity={0.88} />
@@ -1006,7 +988,8 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
           평균 평점
         </span>
         <span className="flex items-center gap-1 text-xs" style={{ color: "#9CA3AF" }}>
-          <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0" style={{ background: "#4285F430" }} />
+          <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0"
+            style={{ background: BAR_COLOR, opacity: 0.35 }} />
           리뷰 수
         </span>
         {phaseZones.map((zone, i) => (
