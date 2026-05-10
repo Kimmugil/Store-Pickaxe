@@ -3,8 +3,8 @@
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
-import { ArrowLeft, X, ChevronDown, ChevronUp, Info } from "lucide-react";
-import type { Analysis, Review, AppMeta, PhaseData, ComplaintPraise } from "@/lib/types";
+import { ArrowLeft, X, ChevronDown, ChevronUp, Info, ChevronLeft, ChevronRight } from "lucide-react";
+import type { Analysis, Review, AppMeta, PhaseData, ComplaintPraise, CategoryData } from "@/lib/types";
 
 interface ReportData {
   analysis: Analysis;
@@ -47,6 +47,7 @@ function ReportContent() {
   const [activeTab, setActiveTab] = useState<Tab>("summary");
   const [keywordFilter, setKeywordFilter] = useState("");
   const [reviewPlatform, setReviewPlatform] = useState<"google" | "apple">("google");
+  const [keywordPopup, setKeywordPopup] = useState<{ keyword: string } | null>(null);
 
   useEffect(() => {
     if (!appKey || !analysisId) return;
@@ -60,6 +61,10 @@ function ReportContent() {
     setActiveTab("reviews");
   }
 
+  function handleKeywordPopup(keyword: string) {
+    setKeywordPopup({ keyword });
+  }
+
   if (loading) return <SkeletonReport />;
   if (!data) return (
     <div className="text-center py-20">
@@ -69,7 +74,10 @@ function ReportContent() {
   );
 
   const { analysis, meta, google_reviews, apple_reviews, all_analyses = [] } = data;
-  const otherAnalyses = all_analyses.filter((a) => a.analysis_id !== analysisId);
+  // all_analyses는 최신순 정렬 (newest first)
+  const currentIdx = all_analyses.findIndex((a) => a.analysis_id === analysisId);
+  const prevAnalysis = currentIdx >= 0 ? all_analyses[currentIdx + 1] ?? null : null; // 더 오래된 분석
+  const nextAnalysis = currentIdx > 0 ? all_analyses[currentIdx - 1] ?? null : null;  // 더 새로운 분석
   const gCollected = computeAvgFromDist(analysis.google_rating_dist);
   const aCollected = computeAvgFromDist(analysis.apple_rating_dist);
 
@@ -88,13 +96,28 @@ function ReportContent() {
 
   return (
     <div className="space-y-6">
+      {/* 키워드 팝업 */}
+      {keywordPopup && (
+        <KeywordPopup
+          keyword={keywordPopup.keyword}
+          reviews={[...taggedGoogle, ...taggedApple]}
+          onClose={() => setKeywordPopup(null)}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <Link href={`/${appKey}`} className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: "#9CA3AF" }}>
           <ArrowLeft size={14} />
           {meta.app_name}
         </Link>
-        {otherAnalyses.length > 0 && (
-          <PrevReportsDropdown analyses={otherAnalyses} appKey={appKey} />
+        {all_analyses.length > 1 && (
+          <AnalysisTimelineNav
+            all={all_analyses}
+            currentIdx={currentIdx}
+            appKey={appKey}
+            prevAnalysis={prevAnalysis}
+            nextAnalysis={nextAnalysis}
+          />
         )}
       </div>
 
@@ -175,7 +198,11 @@ function ReportContent() {
       </div>
 
       {activeTab === "summary" && (
-        <SummaryTab analysis={analysis} allReviews={allTagged} onKeywordClick={handleKeywordClick} />
+        <SummaryTab
+          analysis={analysis}
+          allReviews={allTagged}
+          onKeywordClick={handleKeywordClick}
+        />
       )}
       {activeTab === "platform" && (
         <PlatformTab
@@ -183,6 +210,7 @@ function ReportContent() {
           googleReviews={taggedGoogle}
           appleReviews={taggedApple}
           onKeywordClick={handleKeywordClick}
+          onKeywordPopup={handleKeywordPopup}
         />
       )}
       {activeTab === "phases" && hasPhases && (
@@ -271,11 +299,16 @@ function SummaryTab({
       </SampleInfoChip>
 
       <MethodologyNote items={[
-        { label: "분석 방식", value: `Gemini Call #1 — 평점 분포 비례 + 저평점(1~2★) 1.5배 가중 샘플 · Google ${analysis.sample_count_google}건 + Apple ${analysis.sample_count_apple}건` },
+        { label: "분석 방식", value: `Gemini Call #1 — 평점 분포 비례 + 저평점(1~2★) 1.5배 가중 샘플 · Google ${analysis.sample_count_google}건 + Apple ${analysis.sample_count_apple}건 + 월별 평점 추이 컨텍스트` },
         { label: "이슈 선정", value: "AI가 반복 등장 테마를 영향도 기준으로 그룹화하여 상위 3개 선정 (단순 빈도가 아닌 영향도 기준)" },
         { label: "수집 대상", value: "한국어 리뷰 · App Store 최근 ~500건 / Google Play 전체 이력" },
         { label: "주의", value: "별점과 리뷰 내용이 불일치하는 경우가 있습니다 (예: 5★에 불만 내용). AI 분석은 리뷰 텍스트 기준이며 별점은 별도 평점 분포로 확인하세요." },
       ]} />
+
+      {/* 카테고리별 긍정/부정 게이지 */}
+      {analysis.categories && analysis.categories.length > 0 && (
+        <CategoryGaugeSection categories={analysis.categories} />
+      )}
 
       {analysis.main_complaints.length > 0 && (
         <section className="space-y-3">
@@ -427,12 +460,13 @@ function ComplaintPraiseItem({
 // ─── 플랫폼 비교 탭 ──────────────────────────────────────────────
 
 function PlatformTab({
-  analysis, googleReviews, appleReviews, onKeywordClick,
+  analysis, googleReviews, appleReviews, onKeywordClick, onKeywordPopup,
 }: {
   analysis: Analysis;
   googleReviews: TaggedReview[];
   appleReviews: TaggedReview[];
   onKeywordClick: (k: string) => void;
+  onKeywordPopup: (k: string) => void;
 }) {
   const googleDist = analysis.google_rating_dist && Object.keys(analysis.google_rating_dist).length > 0
     ? analysis.google_rating_dist
@@ -481,6 +515,7 @@ function PlatformTab({
         sampleCountGoogle={analysis.sample_count_google}
         sampleCountApple={analysis.sample_count_apple}
         onKeywordClick={onKeywordClick}
+        onKeywordPopup={onKeywordPopup}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -560,7 +595,7 @@ function PlatformCard({
 
 function PlatformDiffCard({
   platformDiff, googleReviews, appleReviews, appleDateFrom, appleDateTo,
-  keywordsGoogle, keywordsApple, sampleCountGoogle, sampleCountApple, onKeywordClick,
+  keywordsGoogle, keywordsApple, sampleCountGoogle, sampleCountApple, onKeywordClick, onKeywordPopup,
 }: {
   platformDiff: string;
   googleReviews: TaggedReview[];
@@ -572,6 +607,7 @@ function PlatformDiffCard({
   sampleCountGoogle: number;
   sampleCountApple: number;
   onKeywordClick: (k: string) => void;
+  onKeywordPopup: (k: string) => void;
 }) {
   let structured: { google_specific?: PlatformIssue[]; apple_specific?: PlatformIssue[] } | null = null;
   try {
@@ -637,14 +673,17 @@ function PlatformDiffCard({
                 <p className="text-xs font-black mb-2" style={{ color: "#4285F4" }}>Google Play</p>
                 <div className="flex flex-wrap gap-1.5">
                   {keywordsGoogle.map((k, i) => (
-                    <button key={i} onClick={() => onKeywordClick(k)}
-                      title="클릭하면 관련 리뷰 보기"
+                    <button key={i} onClick={() => onKeywordPopup(k)}
+                      title="클릭하면 관련 리뷰 팝업"
                       className="text-xs font-medium px-2.5 py-0.5 rounded-full hover:opacity-75 transition-opacity"
                       style={{ background: "#EBF3FF", border: "1px solid #BFDBFE", color: "#4285F4", cursor: "pointer" }}>
                       {k}
                     </button>
                   ))}
                 </div>
+                <p className="text-xs mt-1.5" style={{ color: "#C4C4C4" }}>
+                  키워드를 클릭하면 관련 리뷰를 바로 확인할 수 있습니다
+                </p>
               </div>
             )}
             {keywordsApple.length > 0 && (
@@ -652,8 +691,8 @@ function PlatformDiffCard({
                 <p className="text-xs font-black mb-2" style={{ color: "#1A1A1A" }}>App Store</p>
                 <div className="flex flex-wrap gap-1.5">
                   {keywordsApple.map((k, i) => (
-                    <button key={i} onClick={() => onKeywordClick(k)}
-                      title="클릭하면 관련 리뷰 보기"
+                    <button key={i} onClick={() => onKeywordPopup(k)}
+                      title="클릭하면 관련 리뷰 팝업"
                       className="text-xs font-medium px-2.5 py-0.5 rounded-full hover:opacity-75 transition-opacity"
                       style={{ background: "#F0EFEC", border: "1px solid #E2E8F0", color: "#4A4A4A", cursor: "pointer" }}>
                       {k}
@@ -831,19 +870,11 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
     return <p className="text-xs text-center py-8" style={{ color: "#9CA3AF" }}>데이터가 충분하지 않습니다</p>;
   }
 
-  // ── 레이아웃 상수 ────────────────────────────────────────────
-  const W = 520;
-  const PAD_L = 36, PAD_R = 16;
-  const RATING_PAD_T = 20, RATING_PAD_B = 0;
-  const RATING_INNER_H = 150;
-  const RATING_H = RATING_PAD_T + RATING_INNER_H + RATING_PAD_B;
-  const LABEL_H = 24;   // x축 레이블 영역
-  const VOL_H = 44;     // 볼륨 바 전용 영역
-  const VOL_LABEL_H = 12;
-  const BOTTOM_PAD = 8;
-  const TOTAL_H = RATING_H + LABEL_H + VOL_LABEL_H + VOL_H + BOTTOM_PAD;
-
+  // ── 레이아웃 상수 (단일 SVG, 볼륨 바는 차트 내부) ───────────
+  const W = 520, H = 220, PAD_L = 36, PAD_R = 16, PAD_T = 24, PAD_B = 36;
   const innerW = W - PAD_L - PAD_R;
+  const innerH = H - PAD_T - PAD_B;
+  const chartBottom = PAD_T + innerH; // ★1 기준선
 
   function toX(i: number) {
     return sortedMonths.length === 1
@@ -851,14 +882,8 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
       : PAD_L + (i / (sortedMonths.length - 1)) * innerW;
   }
   function toY(rating: number) {
-    return RATING_PAD_T + RATING_INNER_H - ((rating - 1) / 4) * RATING_INNER_H;
+    return PAD_T + innerH - ((rating - 1) / 4) * innerH;
   }
-
-  // y 위치들
-  const xLabelY = RATING_H + LABEL_H - 4;
-  const volLabelY = RATING_H + LABEL_H + VOL_LABEL_H - 2;
-  const volBottom = RATING_H + LABEL_H + VOL_LABEL_H + VOL_H;
-  const ratingBottom = RATING_PAD_T + RATING_INNER_H; // ★1 라인
 
   // 시기 zone 배경
   const phaseZones: { x1: number; x2: number; fill: string; label: string; labelColor: string }[] = [];
@@ -905,23 +930,46 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
 
   const maxCount = Math.max(...points.map((p) => p.count), 1);
   const barW = points.length > 1
-    ? Math.max(4, (innerW / (points.length - 1)) * 0.55)
+    ? Math.max(4, (innerW / (points.length - 1)) * 0.6)
     : 12;
+
+  // 볼륨 바 색상: 파란색 계열(출시 초반)과 겹치지 않는 중성 회색
+  const BAR_COLOR = "#374151";
 
   return (
     <div>
       <svg
-        viewBox={`0 0 ${W} ${TOTAL_H}`}
+        viewBox={`0 0 ${W} ${H}`}
         style={{ width: "100%", height: "auto", display: "block" }}
         onMouseLeave={() => setHoveredIdx(null)}
       >
-        {/* 시기 zone 배경 (rating 영역에만) */}
+        {/* 1. 시기 zone 배경 */}
         {phaseZones.map((zone, i) => (
-          <rect key={i} x={zone.x1} y={RATING_PAD_T} width={zone.x2 - zone.x1} height={RATING_INNER_H}
+          <rect key={i} x={zone.x1} y={PAD_T} width={zone.x2 - zone.x1} height={innerH}
             fill={zone.fill} opacity={0.45} />
         ))}
 
-        {/* Y축 격자 + 레이블 */}
+        {/* 2. 볼륨 바 — 차트 내부, 하단부터 위로, 비례 높이 (평점 라인 뒤에 렌더링) */}
+        {points.map((p, i) => {
+          const barHeight = Math.max(2, (p.count / maxCount) * innerH * 0.82);
+          const barX = Math.max(PAD_L, p.x - barW / 2); // 첫 바 왼쪽 넘침 방지
+          return (
+            <rect
+              key={i}
+              x={barX}
+              y={chartBottom - barHeight}
+              width={barW}
+              height={barHeight}
+              fill={BAR_COLOR}
+              opacity={hoveredIdx === i ? 0.38 : 0.18}
+              rx={2}
+              style={{ cursor: "pointer" }}
+              onMouseEnter={() => setHoveredIdx(i)}
+            />
+          );
+        })}
+
+        {/* 3. Y축 격자 + 레이블 */}
         {[1, 2, 3, 4, 5].map((rating) => {
           const y = toY(rating);
           return (
@@ -932,10 +980,10 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
           );
         })}
 
-        {/* 추이선 */}
+        {/* 4. 추이선 */}
         <path d={linePath} fill="none" stroke="#4285F4" strokeWidth={2} strokeLinejoin="round" />
 
-        {/* 데이터 포인트 */}
+        {/* 5. 데이터 포인트 */}
         {points.map((p, i) => (
           <circle
             key={i}
@@ -947,44 +995,17 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
           />
         ))}
 
-        {/* X축 구분선 */}
-        <line x1={PAD_L} x2={PAD_L + innerW} y1={ratingBottom} y2={ratingBottom} stroke="#E2E8F0" strokeWidth={0.5} />
-
-        {/* X축 레이블 */}
+        {/* 6. X축 레이블 */}
         {labelIndices.map((i) => (
-          <text key={i} x={points[i].x} y={xLabelY} textAnchor="middle" fill="#9CA3AF" fontSize={8}>
+          <text key={i} x={points[i].x} y={H - 6} textAnchor="middle" fill="#9CA3AF" fontSize={8}>
             {points[i].month.slice(2)}
           </text>
         ))}
 
-        {/* 볼륨 바 섹션 구분선 + "리뷰 수" 레이블 */}
-        <line x1={PAD_L} x2={PAD_L + innerW} y1={volLabelY + 4} y2={volLabelY + 4} stroke="#F0EFEC" strokeWidth={1} />
-        <text x={PAD_L - 5} y={volLabelY + 4} textAnchor="end" fill="#C4C4C4" fontSize={8}>리뷰</text>
-
-        {/* 볼륨 바 — 전용 하단 영역, 비례 높이 */}
-        {points.map((p, i) => {
-          const barHeight = Math.max(2, (p.count / maxCount) * VOL_H);
-          const barX = Math.max(PAD_L, p.x - barW / 2);  // 첫 바 왼쪽 넘침 방지
-          return (
-            <rect
-              key={i}
-              x={barX}
-              y={volBottom - barHeight}
-              width={barW}
-              height={barHeight}
-              fill={hoveredIdx === i ? "#1A1A1A" : "#4285F4"}
-              opacity={hoveredIdx === i ? 0.35 : 0.2}
-              rx={1}
-              style={{ cursor: "pointer" }}
-              onMouseEnter={() => setHoveredIdx(i)}
-            />
-          );
-        })}
-
-        {/* 툴팁 */}
+        {/* 7. 툴팁 */}
         {hp !== null && (() => {
           const tx = Math.min(hp.x + 8, W - TW - 4);
-          const ty = Math.max(hp.y - TH - 8, RATING_PAD_T + 2);
+          const ty = Math.max(hp.y - TH - 8, PAD_T + 2);
           return (
             <g>
               <rect x={tx} y={ty} width={TW} height={TH} rx={5} fill="#1A1A1A" opacity={0.88} />
@@ -1006,7 +1027,8 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
           평균 평점
         </span>
         <span className="flex items-center gap-1 text-xs" style={{ color: "#9CA3AF" }}>
-          <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0" style={{ background: "#4285F430" }} />
+          <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0"
+            style={{ background: BAR_COLOR, opacity: 0.35 }} />
           리뷰 수
         </span>
         {phaseZones.map((zone, i) => (
@@ -1302,46 +1324,182 @@ function formatDateTime(iso: string) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-// ─── 이전 리포트 드롭다운 ─────────────────────────────────────────
+// ─── 분석 타임라인 네비게이션 ──────────────────────────────────────
 
-function PrevReportsDropdown({ analyses, appKey }: { analyses: Analysis[]; appKey: string }) {
-  const [open, setOpen] = useState(false);
+function AnalysisTimelineNav({
+  all, currentIdx, appKey, prevAnalysis, nextAnalysis,
+}: {
+  all: Analysis[];
+  currentIdx: number;
+  appKey: string;
+  prevAnalysis: Analysis | null;  // 더 오래된 분석
+  nextAnalysis: Analysis | null;  // 더 새로운 분석
+}) {
+  const total = all.length;
+  // currentIdx 0 = 가장 최신, total-1 = 가장 오래된
+  const displayNum = currentIdx + 1; // 최신이 1번
+
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg"
-        style={{ background: "#F0EFEC", border: "1.5px solid #E2E8F0", color: "#4A4A4A" }}
-      >
-        이전 리포트 {analyses.length}건
-        {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div
-            className="absolute right-0 top-8 z-20 rounded-xl overflow-hidden min-w-56"
-            style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0", boxShadow: "4px 4px 0 #E2E8F0" }}
-          >
-            {analyses.map((a) => (
-              <a
-                key={a.analysis_id}
-                href={`/report/${a.analysis_id}?app_key=${appKey}`}
-                className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors"
-                style={{ borderBottom: "1px solid #F0EFEC" }}
-                onClick={() => setOpen(false)}
-              >
-                <span className="text-xs font-medium" style={{ color: "#4A4A4A" }}>
-                  {formatDateTime(a.created_at)}
-                </span>
-                <span className="text-xs font-mono" style={{ color: "#C4C4C4" }}>
-                  {a.analysis_id.slice(0, 6)}
-                </span>
-              </a>
-            ))}
-          </div>
-        </>
+    <div className="flex items-center gap-1" style={{ height: 32 }}>
+      {/* 이전(오래된) 분석 */}
+      {prevAnalysis ? (
+        <a
+          href={`/report/${prevAnalysis.analysis_id}?app_key=${appKey}`}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-colors"
+          style={{ background: "#F0EFEC", border: "1.5px solid #E2E8F0", color: "#6B7280" }}
+          title={`이전 분석: ${formatDateTime(prevAnalysis.created_at)}`}
+        >
+          <ChevronLeft size={12} />
+          이전
+        </a>
+      ) : (
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold"
+          style={{ background: "#F9F9F7", border: "1.5px solid #F0EFEC", color: "#C4C4C4" }}>
+          <ChevronLeft size={12} />
+          이전
+        </span>
       )}
+
+      {/* 현재 위치 표시 */}
+      <span className="px-2 py-1 text-xs font-medium" style={{ color: "#9CA3AF" }}>
+        {displayNum} / {total}
+      </span>
+
+      {/* 다음(새로운) 분석 */}
+      {nextAnalysis ? (
+        <a
+          href={`/report/${nextAnalysis.analysis_id}?app_key=${appKey}`}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-colors"
+          style={{ background: "#F0EFEC", border: "1.5px solid #E2E8F0", color: "#6B7280" }}
+          title={`다음 분석: ${formatDateTime(nextAnalysis.created_at)}`}
+        >
+          다음
+          <ChevronRight size={12} />
+        </a>
+      ) : (
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold"
+          style={{ background: "#F9F9F7", border: "1.5px solid #F0EFEC", color: "#C4C4C4" }}>
+          다음
+          <ChevronRight size={12} />
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── 카테고리 긍정/부정 게이지 ────────────────────────────────────
+
+function CategoryGaugeSection({ categories }: { categories: CategoryData[] }) {
+  return (
+    <div className="rounded-xl p-5 space-y-4" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
+      <div>
+        <h3 className="text-sm font-black" style={{ color: "#1A1A1A" }}>카테고리별 반응</h3>
+        <p className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>
+          주요 테마별 긍정/부정 비율 · AI 리뷰 분석 기반 추정치
+        </p>
+      </div>
+      <div className="space-y-3">
+        {categories.map((cat, i) => (
+          <div key={i} className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold" style={{ color: "#1A1A1A" }}>{cat.name}</span>
+              <div className="flex items-center gap-2 text-xs">
+                <span style={{ color: "#10B981" }}>긍 {cat.positive_pct}%</span>
+                <span style={{ color: "#E2E8F0" }}>|</span>
+                <span style={{ color: "#EF4444" }}>부 {cat.negative_pct}%</span>
+              </div>
+            </div>
+            <div className="flex h-2 rounded-full overflow-hidden" style={{ background: "#F0EFEC" }}>
+              <div
+                className="rounded-l-full transition-all"
+                style={{ width: `${cat.positive_pct}%`, background: "#10B981", opacity: 0.75 }}
+              />
+              <div
+                className="rounded-r-full transition-all"
+                style={{ width: `${cat.negative_pct}%`, background: "#EF4444", opacity: 0.75 }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── 키워드 리뷰 팝업 ─────────────────────────────────────────────
+
+function KeywordPopup({
+  keyword, reviews, onClose,
+}: {
+  keyword: string;
+  reviews: TaggedReview[];
+  onClose: () => void;
+}) {
+  const matching = reviews
+    .filter((r) => (r.content || "").includes(keyword))
+    .slice(0, 5);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div
+        className="relative z-10 rounded-2xl overflow-hidden w-full max-w-lg max-h-[80vh] flex flex-col"
+        style={{ background: "#FFFFFF", border: "2px solid #1A1A1A", boxShadow: "6px 6px 0 #1A1A1A" }}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center justify-between px-5 py-3.5"
+          style={{ borderBottom: "1.5px solid #E2E8F0", background: "#F9F9F7" }}>
+          <div>
+            <span className="text-sm font-black" style={{ color: "#1A1A1A" }}>
+              "{keyword}" 관련 리뷰
+            </span>
+            <span className="text-xs ml-2" style={{ color: "#9CA3AF" }}>{matching.length}건</span>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100" style={{ color: "#9CA3AF" }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* 리뷰 목록 */}
+        <div className="overflow-y-auto p-4 space-y-3 flex-1">
+          {matching.length === 0 ? (
+            <p className="text-sm text-center py-8" style={{ color: "#9CA3AF" }}>
+              "{keyword}"가 포함된 리뷰를 찾을 수 없습니다
+            </p>
+          ) : (
+            matching.map((r) => (
+              <div key={r.review_id} className="rounded-xl p-3.5 space-y-2"
+                style={{ background: "#F9F9F7", border: "1px solid #E2E8F0" }}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <StarRating rating={r.rating} size="xs" />
+                  <span
+                    className="text-xs font-bold px-1.5 py-0.5 rounded-full"
+                    style={{
+                      background: r._platform === "google" ? "#EBF3FF" : "#F0EFEC",
+                      color: r._platform === "google" ? "#4285F4" : "#1A1A1A",
+                    }}
+                  >
+                    {r._platform === "google" ? "Google" : "Apple"}
+                  </span>
+                  {r.reviewed_at && (
+                    <span className="text-xs" style={{ color: "#C4C4C4" }}>{formatDate(r.reviewed_at)}</span>
+                  )}
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: "#4A4A4A" }}>
+                  {highlightKeyword(r.content, keyword)}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* 하단 안내 */}
+        <div className="px-5 py-3 text-center" style={{ borderTop: "1px solid #E2E8F0" }}>
+          <p className="text-xs" style={{ color: "#9CA3AF" }}>
+            리뷰 탭에서 "{keyword}" 검색으로 더 많은 결과를 확인할 수 있습니다
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
