@@ -75,6 +75,7 @@ export default function HomePage() {
       const data = await res.json();
       if (!data.ok) throw new Error(data.error);
       setRegisteredKey(data.app_key);
+      setRegistering(false);
       setStep("done");
     } catch (e) {
       setError(String(e));
@@ -89,6 +90,7 @@ export default function HomePage() {
     setStep("idle");
     setSelectedGoogle(null);
     setSelectedApple(null);
+    setRegistering(false);
     setError("");
   }
 
