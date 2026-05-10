@@ -33,18 +33,6 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-def process_app(app: dict) -> None:
-    app_key = app["app_key"]
-    ss_id = app.get("spreadsheet_id", "")
-    release_date = app.get("release_date", "").strip()
-
-    if not ss_id:
-        log.error(f"[{app_key}] spreadsheet_id 없음")
-        return
-
-    log.info(f"[{app_key}] 분석 시작 (출시일: {release_date or '미설정'})")
-
-
 def _calc_monthly_stats(reviews: list[dict]) -> list[dict]:
     """전체 Google 리뷰 기반 월별 평점 평균/건수 계산 (Gemini 컨텍스트용)."""
     monthly: dict[str, list[int]] = {}
@@ -62,6 +50,18 @@ def _calc_monthly_stats(reviews: list[dict]) -> list[dict]:
             avg = round(sum(ratings) / len(ratings), 2)
             stats.append({"month": month, "avg": avg, "count": len(ratings)})
     return stats  # 전체 기간 (Gemini가 중간 시기 트렌드 파악에 활용)
+
+
+def process_app(app: dict) -> None:
+    app_key = app["app_key"]
+    ss_id = app.get("spreadsheet_id", "")
+    release_date = app.get("release_date", "").strip()
+
+    if not ss_id:
+        log.error(f"[{app_key}] spreadsheet_id 없음")
+        return
+
+    log.info(f"[{app_key}] 분석 시작 (출시일: {release_date or '미설정'})")
 
     google_reviews = asheet.get_google_reviews(ss_id)
     apple_reviews = asheet.get_apple_reviews(ss_id)
