@@ -39,6 +39,7 @@ def analyze(
     same_period_google: list[dict] | None = None,
     phases: dict | None = None,
     release_date: str = "",
+    monthly_stats: list[dict] | None = None,
 ) -> dict:
     """
     3개의 독립 Gemini 호출로 분석 실행 후 결과 병합.
@@ -58,7 +59,7 @@ def analyze(
         raise ValueError("분석할 리뷰가 없습니다.")
 
     # Call #1: 종합 요약
-    summary_result = _analyze_summary(google_reviews, apple_reviews, review_scope)
+    summary_result = _analyze_summary(google_reviews, apple_reviews, review_scope, monthly_stats or [])
 
     # Call #2: 플랫폼 비교 (동기간 샘플이 있을 때만)
     sp = same_period_google or []
@@ -74,6 +75,9 @@ def analyze(
     result["sample_count_google"] = g_count
     result["sample_count_apple"] = a_count
     result["created_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # categories 병합
+    result["categories"] = summary_result.get("categories") or []
 
     # platform_diff 구조화
     g_diff = platform_result.get("platform_diff_google") or []
@@ -119,16 +123,28 @@ def _analyze_summary(
     google_reviews: list[dict],
     apple_reviews: list[dict],
     review_scope: str,
+    monthly_stats: list[dict],
 ) -> dict:
     g_lines = [_fmt_review(r, "Google") for r in google_reviews]
     a_lines = [_fmt_review(r, "Apple") for r in apple_reviews]
     all_reviews = "\n".join(g_lines + a_lines)
 
-    prompt = f"""당신은 모바일 게임 리뷰 분석 전문가입니다. 한국어로 응답하세요.
+    # 월별 평점 추이 컨텍스트 (샘플에서 빠진 중간 시기 보완)
+    monthly_ctx = ""
+    if monthly_stats:
+        lines = [f"  {s['month']}: ★{s['avg']:.2f} ({s['count']}건)" for s in monthly_stats]
+        monthly_ctx = (
+            "\n\n## 월별 평점 추이 (전체 수집 Google 리뷰 기반 — 중간 시기 포함 참고 데이터)\n"
+            "※ 아래 데이터는 AI 샘플에 포함되지 않은 중간 시기 트렌드를 보완합니다. "
+            "평점 급락/급등 시점이 있다면 이를 반영하여 분석하세요.\n"
+            + "\n".join(lines)
+        )
+
+    prompt = f"""당신은 모바일 게임 리뷰 분석 전문가입니다.
 
 ## 분석 대상 리뷰 [{review_scope}] (Google {len(google_reviews)}개 + Apple {len(apple_reviews)}개)
 (종합 요약 · 주요 불만/칭찬 · 키워드 분석 기반)
-{all_reviews}
+{all_reviews}{monthly_ctx}
 
 위 데이터를 분석하여 다음 JSON 형식으로 정확하게 응답하세요:
 
@@ -145,8 +161,18 @@ def _analyze_summary(
     {{"title": "주요 칭찬 주제 3", "description": "설명 3"}}
   ],
   "keywords_google": ["불만·칭찬을 대표하는 구체적 이슈 토픽 5개. '게임'·'재미'·'레벨' 같은 일반 단어 제외. 예: '과금유도', '서버불안정', '밸런스붕괴'"],
-  "keywords_apple": ["동일 기준, App Store 리뷰 기반 5개"]
-}}"""
+  "keywords_apple": ["동일 기준, App Store 리뷰 기반 5개"],
+  "categories": [
+    {{"name": "게임플레이/밸런스", "positive_pct": 70, "negative_pct": 30}},
+    {{"name": "과금/결제", "positive_pct": 20, "negative_pct": 80}},
+    {{"name": "그래픽/UI", "positive_pct": 85, "negative_pct": 15}},
+    {{"name": "서버/성능", "positive_pct": 50, "negative_pct": 50}},
+    {{"name": "콘텐츠/스토리", "positive_pct": 65, "negative_pct": 35}}
+  ]
+}}
+
+※ categories: 실제 리뷰에서 반복적으로 언급되는 3~5개 주요 테마를 선정하여 positive_pct + negative_pct = 100이 되도록 작성. 카테고리명은 10자 이내.
+※ 반드시 한국어로만 응답하세요. 영어 혼용 금지."""
 
     return _call_gemini(prompt)
 
@@ -161,7 +187,7 @@ def _analyze_platform(
     a_lines = [_fmt_review(r, "Apple") for r in apple_reviews]
     all_lines = "\n".join(sp_lines + a_lines)
 
-    prompt = f"""당신은 모바일 게임 리뷰 분석 전문가입니다. 한국어로 응답하세요.
+    prompt = f"""당신은 모바일 게임 리뷰 분석 전문가입니다.
 
 ## 동기간 플랫폼 비교 리뷰 (Google {len(same_period_google)}개 + Apple {len(apple_reviews)}개)
 ※ App Store는 최근 약 500건만 수집 가능합니다. Apple 수집 기간과 동일한 Google Play 리뷰만 사용합니다.
@@ -173,7 +199,9 @@ def _analyze_platform(
   "platform_diff_google": [{{"title": "Google Play 고유 이슈 (15자 이내)", "description": "구체적 설명 (40자 이내)"}}, ...],
   "platform_diff_apple": [{{"title": "App Store 고유 이슈 (15자 이내)", "description": "구체적 설명 (40자 이내)"}}, ...]
 }}
-(각 2~3개, 없으면 [])"""
+(각 2~3개, 없으면 [])
+
+※ 반드시 한국어로만 응답하세요. 영어 혼용 금지."""
 
     return _call_gemini(prompt)
 
@@ -225,7 +253,7 @@ def _analyze_phases(
 
     json_template = "{\n" + ",\n".join(json_fields) + "\n}"
 
-    prompt = f"""당신은 모바일 게임 리뷰 분석 전문가입니다. 한국어로 응답하세요.
+    prompt = f"""당신은 모바일 게임 리뷰 분석 전문가입니다.
 
 ## Google Play 시기별 리뷰 (출시일: {release_date})
 각 시기의 평균 평점과 긍정률이 헤더에 표시됩니다. 이를 참고하여 해당 시기 유저 반응 트렌드를 분석하세요.
@@ -234,7 +262,9 @@ def _analyze_phases(
 
 위 시기별 리뷰를 분석하여 다음 JSON 형식으로 응답하세요:
 
-{json_template}"""
+{json_template}
+
+※ 반드시 한국어로만 응답하세요. 영어 혼용 금지."""
 
     return _call_gemini(prompt)
 

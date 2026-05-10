@@ -15,6 +15,7 @@
 import os
 import sys
 import logging
+import time
 from datetime import datetime, timezone
 
 from backend import config as cfg
@@ -42,6 +43,25 @@ def process_app(app: dict) -> None:
         return
 
     log.info(f"[{app_key}] 분석 시작 (출시일: {release_date or '미설정'})")
+
+
+def _calc_monthly_stats(reviews: list[dict]) -> list[dict]:
+    """전체 Google 리뷰 기반 월별 평점 평균/건수 계산 (Gemini 컨텍스트용)."""
+    monthly: dict[str, list[int]] = {}
+    for r in reviews:
+        month = (r.get("reviewed_at", "") or "")[:7]
+        if len(month) == 7 and "-" in month:
+            try:
+                monthly.setdefault(month, []).append(int(r.get("rating", 3)))
+            except (ValueError, TypeError):
+                pass
+    stats = []
+    for month in sorted(monthly.keys()):
+        ratings = monthly[month]
+        if len(ratings) >= 5:  # 최소 5건 이상인 달만 포함
+            avg = round(sum(ratings) / len(ratings), 2)
+            stats.append({"month": month, "avg": avg, "count": len(ratings)})
+    return stats  # 전체 기간 (Gemini가 중간 시기 트렌드 파악에 활용)
 
     google_reviews = asheet.get_google_reviews(ss_id)
     apple_reviews = asheet.get_apple_reviews(ss_id)
@@ -85,6 +105,10 @@ def process_app(app: dict) -> None:
     apple_rating_dist = calc_rating_dist(apple_reviews)
     log.info(f"[{app_key}] 평점 분포 — Google {google_rating_dist} / Apple {apple_rating_dist}")
 
+    # 월별 평점 통계 계산 (Gemini 컨텍스트용 — 샘플에서 빠진 중간 시기 보완)
+    monthly_stats = _calc_monthly_stats(google_reviews)
+    log.info(f"[{app_key}] 월별 통계: {len(monthly_stats)}개월 데이터")
+
     # 일일 AI 분석 한도 체크 (force=True일 때는 건너뜀)
     force = os.getenv("FORCE", "false").strip().lower() == "true"
     if not force:
@@ -101,6 +125,7 @@ def process_app(app: dict) -> None:
         same_period_google=sp_google,
         phases=phases,
         release_date=release_date,
+        monthly_stats=monthly_stats,
     )
     result["google_sentiment"] = google_sentiment
     result["apple_sentiment"] = apple_sentiment
@@ -109,18 +134,26 @@ def process_app(app: dict) -> None:
     result["google_rating_dist"] = google_rating_dist
     result["apple_rating_dist"] = apple_rating_dist
 
+    # 분석 저장 (성공 시 pending_analysis=FALSE 보장)
     analysis_id = asheet.save_analysis(ss_id, result)
     log.info(f"[{app_key}] 분석 저장: {analysis_id}")
 
-    # 일일 사용량 증가 (force 여부 무관하게 실제 분석이 완료된 경우에만)
-    new_usage = master.increment_daily_ai_usage()
-    log.info(f"[{app_key}] 일일 AI 분석 사용량: {new_usage}회")
+    # 일일 사용량 증가 (실패해도 분석 완료 처리는 계속)
+    try:
+        new_usage = master.increment_daily_ai_usage()
+        log.info(f"[{app_key}] 일일 AI 분석 사용량: {new_usage}회")
+    except Exception as e:
+        log.warning(f"[{app_key}] 일일 사용량 증가 실패 (무시, 계속 진행): {e}")
 
+    # pending_analysis=FALSE 는 반드시 설정 (재시도 포함)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    master.update_app(app_key, {
-        "last_analyzed_at": now,
-        "pending_analysis": "FALSE",
-    })
+    update_fields = {"last_analyzed_at": now, "pending_analysis": "FALSE"}
+    try:
+        master.update_app(app_key, update_fields)
+    except Exception as e:
+        log.error(f"[{app_key}] pending_analysis 업데이트 1차 실패: {e} — 5초 후 재시도")
+        time.sleep(5)
+        master.update_app(app_key, update_fields)  # 2차 시도 (실패 시 예외 전파)
     log.info(f"[{app_key}] 완료")
 
 

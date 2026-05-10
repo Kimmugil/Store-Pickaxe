@@ -41,6 +41,7 @@ ANALYSIS_HEADERS = [
     "sample_date_min", "sample_date_max",
     "google_phase_launch", "google_phase_growth", "google_phase_stable",
     "google_rating_dist", "apple_rating_dist",   # 전체 수집 리뷰 평점 분포
+    "categories",   # 카테고리별 긍정/부정 비율 JSON [{name, positive_pct, negative_pct}]
 ]
 
 
@@ -210,6 +211,7 @@ def save_analysis(spreadsheet_id: str, result: dict) -> str:
         result.get("google_phase_stable", ""),
         json.dumps(result.get("google_rating_dist", {}), ensure_ascii=False),
         json.dumps(result.get("apple_rating_dist", {}), ensure_ascii=False),
+        json.dumps(result.get("categories", []), ensure_ascii=False),
     ], value_input_option="USER_ENTERED")
     return analysis_id
 

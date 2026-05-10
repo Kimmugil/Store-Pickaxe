@@ -2,7 +2,7 @@
 마스터 스프레드시트 CRUD
 탭: MASTER / CONFIG / UI_TEXTS
 """
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from functools import lru_cache
 from typing import Optional
 
@@ -15,6 +15,8 @@ _SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
+
+KST = timezone(timedelta(hours=9))  # 한국 표준시 (UTC+9)
 
 MASTER_HEADERS = [
     "app_key", "app_name", "developer",
@@ -200,11 +202,11 @@ def set_config_value(key: str, value: str) -> None:
 # ─── AI 일일 사용량 ───────────────────────────────────────────────
 
 def get_daily_ai_usage() -> tuple[str, int]:
-    """오늘 날짜(UTC)와 오늘 AI 분석 사용 횟수를 반환. (date_str, count)"""
+    """오늘 날짜(KST)와 오늘 AI 분석 사용 횟수를 반환. (date_str, count)"""
     cfg_vals = get_config_values()
     stored_date = cfg_vals.get("AI_DAILY_DATE", "")
     stored_count = cfg_vals.get("AI_DAILY_COUNT", "0") or "0"
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(KST).strftime("%Y-%m-%d")  # KST 기준 (UTC+9)
     if stored_date != today:
         return today, 0
     try:
@@ -224,7 +226,7 @@ def increment_daily_ai_usage() -> int:
 
 def reset_daily_ai_usage() -> None:
     """오늘 AI 분석 사용 횟수를 0으로 초기화."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(KST).strftime("%Y-%m-%d")  # KST 기준
     set_config_value("AI_DAILY_DATE", today)
     set_config_value("AI_DAILY_COUNT", "0")
 

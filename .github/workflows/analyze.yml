@@ -11,6 +11,10 @@ on:
         required: false
         default: "false"
 
+concurrency:
+  group: analyze-${{ inputs.app_key }}
+  cancel-in-progress: false   # 동시 분석 큐잉 방지 (이미 실행 중이면 대기)
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
