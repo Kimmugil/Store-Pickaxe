@@ -354,22 +354,35 @@ def _call_gemini(prompt: str) -> dict:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.3,
-                    max_output_tokens=16384,   # 8192 → 16384: 긴 응답 잘림 방지
+                    max_output_tokens=32768,   # 16384 → 32768: 잘림 방지
                     response_mime_type="application/json",
                 ),
             )
+            # finish_reason 로깅 (MAX_TOKENS 등 원인 파악용)
+            try:
+                finish_reason = response.candidates[0].finish_reason if response.candidates else "UNKNOWN"
+                if str(finish_reason) not in ("FinishReason.STOP", "STOP", "1"):
+                    log.warning(f"Gemini finish_reason={finish_reason} — 응답이 비정상 종료됐을 수 있음")
+            except Exception:
+                pass
+
             text = response.text or ""
             try:
                 return json.loads(text)
             except json.JSONDecodeError:
                 # 1차 파싱 실패 → 복구 시도
-                log.warning(f"Gemini JSON 1차 파싱 실패 (len={len(text)}) — 복구 시도 중")
+                log.warning(f"Gemini JSON 1차 파싱 실패 (len={len(text)}, attempt={attempt}) — 복구 시도 중")
                 repaired = _repair_json(text)
                 if repaired is not None:
                     log.info("JSON 복구 성공 (부분 결과 사용)")
                     return repaired
-                log.error(f"Gemini JSON 복구 실패: {text[:600]}")
-                raise RuntimeError(f"Gemini 응답 JSON 파싱 실패 (복구 불가)")
+                log.error(f"Gemini JSON 복구 실패 (attempt={attempt}): {text[:600]}")
+                # JSON 파싱 실패도 재시도 가능 (마지막 시도가 아닐 때)
+                if delay is not None:
+                    log.warning(f"JSON 파싱 실패 — {delay}초 후 재시도")
+                    time.sleep(delay)
+                    continue
+                raise RuntimeError(f"Gemini 응답 JSON 파싱 실패 (복구 불가, {attempt}회 시도)")
         except RuntimeError:
             raise
         except Exception as exc:
