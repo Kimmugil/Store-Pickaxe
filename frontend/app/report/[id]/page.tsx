@@ -11,6 +11,7 @@ interface ReportData {
   meta: AppMeta;
   google_reviews: Review[];
   apple_reviews: Review[];
+  all_analyses: Analysis[];
 }
 
 interface MonthlyRatings {
@@ -67,7 +68,8 @@ function ReportContent() {
     </div>
   );
 
-  const { analysis, meta, google_reviews, apple_reviews } = data;
+  const { analysis, meta, google_reviews, apple_reviews, all_analyses = [] } = data;
+  const otherAnalyses = all_analyses.filter((a) => a.analysis_id !== analysisId);
   const gCollected = computeAvgFromDist(analysis.google_rating_dist);
   const aCollected = computeAvgFromDist(analysis.apple_rating_dist);
 
@@ -86,10 +88,15 @@ function ReportContent() {
 
   return (
     <div className="space-y-6">
-      <Link href={`/${appKey}`} className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: "#9CA3AF" }}>
-        <ArrowLeft size={14} />
-        {meta.app_name}
-      </Link>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <Link href={`/${appKey}`} className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: "#9CA3AF" }}>
+          <ArrowLeft size={14} />
+          {meta.app_name}
+        </Link>
+        {otherAnalyses.length > 0 && (
+          <PrevReportsDropdown analyses={otherAnalyses} appKey={appKey} />
+        )}
+      </div>
 
       {/* 리포트 헤더 */}
       <div className="card overflow-hidden">
@@ -102,9 +109,12 @@ function ReportContent() {
             <div className="flex-1 min-w-0">
               <h1 className="font-black text-xl" style={{ color: "#1A1A1A", letterSpacing: "-0.02em" }}>{meta.app_name}</h1>
               <p className="text-xs mt-0.5 flex flex-wrap gap-x-3" style={{ color: "#9CA3AF" }}>
-                <span>분석 {formatDate(analysis.created_at)}</span>
+                <span>분석 {formatDateTime(analysis.created_at)}</span>
                 <span>샘플 {(analysis.sample_count_google + analysis.sample_count_apple).toLocaleString()}건</span>
                 {meta.release_date && <span>출시 {meta.release_date}</span>}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: "#C4C4C4", fontFamily: "monospace" }}>
+                ID {analysis.analysis_id.slice(0, 8)}…
               </p>
               {(meta.google_rating || gCollected || meta.apple_rating || aCollected) && (
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
@@ -805,7 +815,6 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
 
   const allMonths = Object.keys(ratings).sort();
 
-  // #6 — 출시 후 180일 이내 + 월 10건 이상 필터
   let sortedMonths = allMonths;
   if (release_date) {
     const cutoffDate = new Date(release_date);
@@ -822,12 +831,34 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
     return <p className="text-xs text-center py-8" style={{ color: "#9CA3AF" }}>데이터가 충분하지 않습니다</p>;
   }
 
-  const W = 520, H = 220, PAD_L = 36, PAD_R = 16, PAD_T = 24, PAD_B = 36;
-  const innerW = W - PAD_L - PAD_R;
-  const innerH = H - PAD_T - PAD_B;
+  // ── 레이아웃 상수 ────────────────────────────────────────────
+  const W = 520;
+  const PAD_L = 36, PAD_R = 16;
+  const RATING_PAD_T = 20, RATING_PAD_B = 0;
+  const RATING_INNER_H = 150;
+  const RATING_H = RATING_PAD_T + RATING_INNER_H + RATING_PAD_B;
+  const LABEL_H = 24;   // x축 레이블 영역
+  const VOL_H = 44;     // 볼륨 바 전용 영역
+  const VOL_LABEL_H = 12;
+  const BOTTOM_PAD = 8;
+  const TOTAL_H = RATING_H + LABEL_H + VOL_LABEL_H + VOL_H + BOTTOM_PAD;
 
-  function toX(i: number) { return PAD_L + (i / (sortedMonths.length - 1)) * innerW; }
-  function toY(rating: number) { return PAD_T + innerH - ((rating - 1) / 4) * innerH; }
+  const innerW = W - PAD_L - PAD_R;
+
+  function toX(i: number) {
+    return sortedMonths.length === 1
+      ? PAD_L + innerW / 2
+      : PAD_L + (i / (sortedMonths.length - 1)) * innerW;
+  }
+  function toY(rating: number) {
+    return RATING_PAD_T + RATING_INNER_H - ((rating - 1) / 4) * RATING_INNER_H;
+  }
+
+  // y 위치들
+  const xLabelY = RATING_H + LABEL_H - 4;
+  const volLabelY = RATING_H + LABEL_H + VOL_LABEL_H - 2;
+  const volBottom = RATING_H + LABEL_H + VOL_LABEL_H + VOL_H;
+  const ratingBottom = RATING_PAD_T + RATING_INNER_H; // ★1 라인
 
   // 시기 zone 배경
   const phaseZones: { x1: number; x2: number; fill: string; label: string; labelColor: string }[] = [];
@@ -870,45 +901,25 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
     .filter((i) => i % labelStep === 0 || i === sortedMonths.length - 1);
 
   const hp = hoveredIdx !== null ? points[hoveredIdx] : null;
-  const TW = 120, TH = 40;
+  const TW = 128, TH = 40;
 
   const maxCount = Math.max(...points.map((p) => p.count), 1);
   const barW = points.length > 1
-    ? Math.max(3, (innerW / (points.length - 1)) * 0.5)
-    : 8;
-
-  const chartBottom = PAD_T + innerH; // 볼륨 바 기준선 (= ★1 라인)
+    ? Math.max(4, (innerW / (points.length - 1)) * 0.55)
+    : 12;
 
   return (
     <div>
       <svg
-        viewBox={`0 0 ${W} ${H}`}
+        viewBox={`0 0 ${W} ${TOTAL_H}`}
         style={{ width: "100%", height: "auto", display: "block" }}
         onMouseLeave={() => setHoveredIdx(null)}
       >
-        {/* 시기 zone 배경 */}
+        {/* 시기 zone 배경 (rating 영역에만) */}
         {phaseZones.map((zone, i) => (
-          <rect key={i} x={zone.x1} y={PAD_T} width={zone.x2 - zone.x1} height={innerH}
+          <rect key={i} x={zone.x1} y={RATING_PAD_T} width={zone.x2 - zone.x1} height={RATING_INNER_H}
             fill={zone.fill} opacity={0.45} />
         ))}
-
-        {/* 볼륨 바 — 차트 하단 25% 영역에만 표시 (라인·포인트 겹침 방지) */}
-        {points.map((p, i) => {
-          const barMaxH = innerH * 0.25;
-          const barHeight = Math.max(2, (p.count / maxCount) * barMaxH);
-          return (
-            <rect
-              key={i}
-              x={p.x - barW / 2}
-              y={chartBottom - barHeight}
-              width={barW}
-              height={barHeight}
-              fill="#4285F4"
-              opacity={0.18}
-              rx={1}
-            />
-          );
-        })}
 
         {/* Y축 격자 + 레이블 */}
         {[1, 2, 3, 4, 5].map((rating) => {
@@ -936,17 +947,44 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
           />
         ))}
 
+        {/* X축 구분선 */}
+        <line x1={PAD_L} x2={PAD_L + innerW} y1={ratingBottom} y2={ratingBottom} stroke="#E2E8F0" strokeWidth={0.5} />
+
         {/* X축 레이블 */}
         {labelIndices.map((i) => (
-          <text key={i} x={points[i].x} y={H - 6} textAnchor="middle" fill="#9CA3AF" fontSize={8}>
+          <text key={i} x={points[i].x} y={xLabelY} textAnchor="middle" fill="#9CA3AF" fontSize={8}>
             {points[i].month.slice(2)}
           </text>
         ))}
 
+        {/* 볼륨 바 섹션 구분선 + "리뷰 수" 레이블 */}
+        <line x1={PAD_L} x2={PAD_L + innerW} y1={volLabelY + 4} y2={volLabelY + 4} stroke="#F0EFEC" strokeWidth={1} />
+        <text x={PAD_L - 5} y={volLabelY + 4} textAnchor="end" fill="#C4C4C4" fontSize={8}>리뷰</text>
+
+        {/* 볼륨 바 — 전용 하단 영역, 비례 높이 */}
+        {points.map((p, i) => {
+          const barHeight = Math.max(2, (p.count / maxCount) * VOL_H);
+          const barX = Math.max(PAD_L, p.x - barW / 2);  // 첫 바 왼쪽 넘침 방지
+          return (
+            <rect
+              key={i}
+              x={barX}
+              y={volBottom - barHeight}
+              width={barW}
+              height={barHeight}
+              fill={hoveredIdx === i ? "#1A1A1A" : "#4285F4"}
+              opacity={hoveredIdx === i ? 0.35 : 0.2}
+              rx={1}
+              style={{ cursor: "pointer" }}
+              onMouseEnter={() => setHoveredIdx(i)}
+            />
+          );
+        })}
+
         {/* 툴팁 */}
         {hp !== null && (() => {
           const tx = Math.min(hp.x + 8, W - TW - 4);
-          const ty = Math.max(hp.y - TH - 8, PAD_T + 2);
+          const ty = Math.max(hp.y - TH - 8, RATING_PAD_T + 2);
           return (
             <g>
               <rect x={tx} y={ty} width={TW} height={TH} rx={5} fill="#1A1A1A" opacity={0.88} />
@@ -954,7 +992,7 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
                 {hp.month.replace("-", "년 ")}월
               </text>
               <text x={tx + 8} y={ty + 28} fill="#FFD600" fontSize={9}>
-                ★{hp.avg.toFixed(2)} · {hp.count.toLocaleString()}건
+                ★{hp.avg.toFixed(2)} · 리뷰 {hp.count.toLocaleString()}건
               </text>
             </g>
           );
@@ -962,17 +1000,23 @@ function MonthlyRatingChart({ data }: { data: MonthlyRatings }) {
       </svg>
 
       {/* 범례 */}
-      {phaseZones.length > 0 && (
-        <div className="flex items-center gap-4 mt-1 justify-center flex-wrap">
-          {phaseZones.map((zone, i) => (
-            <span key={i} className="flex items-center gap-1 text-xs" style={{ color: zone.labelColor }}>
-              <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0"
-                style={{ background: zone.fill, border: `1px solid ${zone.labelColor}60` }} />
-              {zone.label}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="flex items-center gap-4 mt-1 justify-center flex-wrap">
+        <span className="flex items-center gap-1 text-xs" style={{ color: "#9CA3AF" }}>
+          <span className="inline-block w-8 h-1.5 rounded-full flex-shrink-0" style={{ background: "#4285F4" }} />
+          평균 평점
+        </span>
+        <span className="flex items-center gap-1 text-xs" style={{ color: "#9CA3AF" }}>
+          <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0" style={{ background: "#4285F430" }} />
+          리뷰 수
+        </span>
+        {phaseZones.map((zone, i) => (
+          <span key={i} className="flex items-center gap-1 text-xs" style={{ color: zone.labelColor }}>
+            <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0"
+              style={{ background: zone.fill, border: `1px solid ${zone.labelColor}60` }} />
+            {zone.label}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1250,6 +1294,56 @@ function formatDate(iso: string) {
   if (!iso) return "";
   const d = new Date(iso);
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function formatDateTime(iso: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+// ─── 이전 리포트 드롭다운 ─────────────────────────────────────────
+
+function PrevReportsDropdown({ analyses, appKey }: { analyses: Analysis[]; appKey: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg"
+        style={{ background: "#F0EFEC", border: "1.5px solid #E2E8F0", color: "#4A4A4A" }}
+      >
+        이전 리포트 {analyses.length}건
+        {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div
+            className="absolute right-0 top-8 z-20 rounded-xl overflow-hidden min-w-56"
+            style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0", boxShadow: "4px 4px 0 #E2E8F0" }}
+          >
+            {analyses.map((a) => (
+              <a
+                key={a.analysis_id}
+                href={`/report/${a.analysis_id}?app_key=${appKey}`}
+                className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors"
+                style={{ borderBottom: "1px solid #F0EFEC" }}
+                onClick={() => setOpen(false)}
+              >
+                <span className="text-xs font-medium" style={{ color: "#4A4A4A" }}>
+                  {formatDateTime(a.created_at)}
+                </span>
+                <span className="text-xs font-mono" style={{ color: "#C4C4C4" }}>
+                  {a.analysis_id.slice(0, 6)}
+                </span>
+              </a>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function SkeletonReport() {

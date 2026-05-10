@@ -369,7 +369,7 @@ export default function HomePage() {
                       className="text-xs text-left px-5 py-4 rounded-2xl"
                       style={{ background: "#FFFDE7", border: "2px solid #1A1A1A", color: "#4A4A4A" }}
                     >
-                      AI 분석은 관리자 승인 후 자동으로 진행됩니다.
+                      리뷰 수집이 완료되면 AI 분석이 자동으로 진행됩니다 (수 분 ~ 수십 분 소요).
                     </div>
                     <button onClick={closeModal} className="neo-button-primary">
                       닫기
@@ -400,9 +400,13 @@ function RecentCard({ app, analysis }: { app: AppMeta; analysis: Analysis | null
   const gCollected = computeAvgFromDist(analysis?.google_rating_dist);
   const aCollected = computeAvgFromDist(analysis?.apple_rating_dist);
 
+  const href = analysis?.analysis_id
+    ? `/report/${analysis.analysis_id}?app_key=${app.app_key}`
+    : `/${app.app_key}`;
+
   return (
     <Link
-      href={`/${app.app_key}`}
+      href={href}
       className="flex-shrink-0 card-hover overflow-hidden"
       style={{ width: 380 }}
     >

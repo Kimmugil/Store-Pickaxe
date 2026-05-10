@@ -123,6 +123,41 @@ export async function getAdminPassword(): Promise<string> {
   return config["ADMIN_PASSWORD"] ?? "";
 }
 
+/** 캐시 없이 CONFIG 전체 읽기 (관리자 패널 실시간 조회용) */
+export async function getConfigValuesDirect(): Promise<Record<string, string>> {
+  try {
+    const rows = await readRange(MASTER_ID(), "CONFIG!A:B");
+    const config: Record<string, string> = {};
+    for (const row of rows.slice(1)) {
+      if (row[0]) config[row[0]] = row[1] ?? "";
+    }
+    return config;
+  } catch {
+    return {};
+  }
+}
+
+/** CONFIG 탭에서 key 행을 찾아 값 갱신. 없으면 새 행 추가. */
+export async function setConfigValueDirect(key: string, value: string): Promise<void> {
+  const rows = await readRange(MASTER_ID(), "CONFIG!A:B");
+  const rowIdx = rows.findIndex((r, i) => i > 0 && r[0] === key);
+  if (rowIdx < 0) {
+    await appendRow(MASTER_ID(), "CONFIG!A:B", [key, value]);
+  } else {
+    await writeRange(MASTER_ID(), `CONFIG!B${rowIdx + 1}`, [[value]]);
+  }
+}
+
+/** 오늘 날짜(UTC)와 AI 분석 사용 횟수/한도를 반환 */
+export async function getDailyAiUsageDirect(): Promise<{ date: string; count: number; limit: number }> {
+  const config = await getConfigValuesDirect();
+  const today = new Date().toISOString().slice(0, 10);
+  const storedDate = config["AI_DAILY_DATE"] ?? "";
+  const count = storedDate === today ? (parseInt(config["AI_DAILY_COUNT"] ?? "0") || 0) : 0;
+  const limit = parseInt(config["AI_DAILY_LIMIT"] ?? "30") || 30;
+  return { date: today, count, limit };
+}
+
 export const getUITexts = unstable_cache(
   async (): Promise<Record<string, string>> => {
     try {
