@@ -33,15 +33,6 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-def _group_by_lang(reviews: list[dict]) -> dict[str, list[dict]]:
-    """리뷰를 lang_code 기준으로 그룹화."""
-    groups: dict[str, list[dict]] = {}
-    for r in reviews:
-        lc = r.get("lang_code") or "ko"
-        groups.setdefault(lc, []).append(r)
-    return groups
-
-
 def _calc_monthly_stats(reviews: list[dict]) -> list[dict]:
     """전체 Google 리뷰 기반 월별 평점 평균/건수 계산 (Gemini 컨텍스트용)."""
     monthly: dict[str, list[int]] = {}
@@ -72,18 +63,51 @@ def process_app(app: dict) -> None:
 
     log.info(f"[{app_key}] 분석 시작 (출시일: {release_date or '미설정'})")
 
-    # 전체 리뷰 조회 (언어 필터 없음)
-    google_reviews_all = asheet.get_google_reviews(ss_id)
-    apple_reviews_all = asheet.get_apple_reviews(ss_id)
+    google_reviews = asheet.get_google_reviews(ss_id)
+    apple_reviews = asheet.get_apple_reviews(ss_id)
 
-    # 언어별로 그룹화
-    google_by_lang = _group_by_lang(google_reviews_all)
-    apple_by_lang = _group_by_lang(apple_reviews_all)
+    # 전체 샘플 (종합 분석용)
+    g_sample, a_sample, date_min, date_max = sampler.sample_for_analysis(google_reviews, apple_reviews)
 
-    # 분석 대상 언어 결정 (ko 항상 포함, 최대 ko/en/zh_TW)
-    all_langs = (set(google_by_lang.keys()) | set(apple_by_lang.keys())) & {"ko", "en", "zh_TW"}
-    all_langs.add("ko")
-    target_langs = ["ko"] + sorted(all_langs - {"ko"})
+    total_sample = len(g_sample) + len(a_sample)
+    min_reviews = cfg.min_reviews_for_ai()
+
+    if total_sample < min_reviews:
+        log.warning(f"[{app_key}] 샘플 부족 ({total_sample}개 < {min_reviews}개) — 건너뜀")
+        master.set_pending_analysis(app_key, False)
+        return
+
+    log.info(f"[{app_key}] 전체 샘플: Google {len(g_sample)}개 + Apple {len(a_sample)}개 ({date_min} ~ {date_max})")
+
+    # 동기간 플랫폼 비교 샘플 (Apple 수집 기간 = Google 필터 기간)
+    sp_google, apple_date_from, apple_date_to = sampler.sample_platform_comparison(
+        google_reviews, apple_reviews
+    )
+    if sp_google:
+        log.info(f"[{app_key}] 동기간 Google 샘플: {len(sp_google)}개 ({apple_date_from} ~ {apple_date_to})")
+    else:
+        log.info(f"[{app_key}] Apple 리뷰 없음 — 플랫폼 비교 생략")
+
+    # 시기별 분할 (출시일 있을 때만)
+    phases: dict = {}
+    if release_date:
+        phases = sampler.sample_phases(google_reviews, release_date)
+        for pk, pd in phases.items():
+            log.info(f"[{app_key}] 시기별 {pk}: {pd['count']}건 ({pd['date_from']} ~ {pd['date_to']}), 샘플 {len(pd['reviews'])}개, 긍정률 {pd.get('sentiment')}%")
+
+    # sentiment: AI 추측이 아닌 전체 수집 리뷰의 실제 평점 분포에서 계산
+    google_sentiment = calc_sentiment(google_reviews)
+    apple_sentiment = calc_sentiment(apple_reviews)
+    log.info(f"[{app_key}] 긍정도 계산 — Google {google_sentiment}% / Apple {apple_sentiment}%")
+
+    # 평점 분포: 전체 수집 리뷰 기반 (AI 분석과 별도로 집계)
+    google_rating_dist = calc_rating_dist(google_reviews)
+    apple_rating_dist = calc_rating_dist(apple_reviews)
+    log.info(f"[{app_key}] 평점 분포 — Google {google_rating_dist} / Apple {apple_rating_dist}")
+
+    # 월별 평점 통계 계산 (Gemini 컨텍스트용 — 샘플에서 빠진 중간 시기 보완)
+    monthly_stats = _calc_monthly_stats(google_reviews)
+    log.info(f"[{app_key}] 월별 통계: {len(monthly_stats)}개월 데이터")
 
     # 일일 AI 분석 한도 체크 (force=True일 때는 건너뜀)
     force = os.getenv("FORCE", "false").strip().lower() == "true"
@@ -94,88 +118,32 @@ def process_app(app: dict) -> None:
             log.warning(f"[{app_key}] 일일 AI 분석 한도 초과 ({usage}/{limit}) — pending_analysis=TRUE 유지")
             return  # pending_analysis 는 TRUE 그대로 유지
 
-    any_saved = False
+    result = gemini.analyze(
+        g_sample, a_sample,
+        mode="onboarding",
+        review_scope="전체 수집 리뷰",
+        same_period_google=sp_google,
+        phases=phases,
+        release_date=release_date,
+        monthly_stats=monthly_stats,
+    )
+    result["google_sentiment"] = google_sentiment
+    result["apple_sentiment"] = apple_sentiment
+    result["sample_date_min"] = date_min
+    result["sample_date_max"] = date_max
+    result["google_rating_dist"] = google_rating_dist
+    result["apple_rating_dist"] = apple_rating_dist
 
-    for lang_code in target_langs:
-        google_reviews = google_by_lang.get(lang_code, [])
-        apple_reviews = apple_by_lang.get(lang_code, [])
+    # 분석 저장 (성공 시 pending_analysis=FALSE 보장)
+    analysis_id = asheet.save_analysis(ss_id, result)
+    log.info(f"[{app_key}] 분석 저장: {analysis_id}")
 
-        log.info(f"[{app_key}] [{lang_code}] 분석 — Google {len(google_reviews)}개 / Apple {len(apple_reviews)}개")
-
-        # 샘플링
-        g_sample, a_sample, date_min, date_max = sampler.sample_for_analysis(google_reviews, apple_reviews)
-
-        total_sample = len(g_sample) + len(a_sample)
-        min_reviews = cfg.min_reviews_for_ai()
-
-        if total_sample < min_reviews:
-            log.warning(f"[{app_key}] [{lang_code}] 샘플 부족 ({total_sample}개 < {min_reviews}개) — 건너뜀")
-            continue
-
-        log.info(f"[{app_key}] [{lang_code}] 전체 샘플: Google {len(g_sample)}개 + Apple {len(a_sample)}개 ({date_min} ~ {date_max})")
-
-        # 동기간 플랫폼 비교 샘플
-        sp_google, apple_date_from, apple_date_to = sampler.sample_platform_comparison(
-            google_reviews, apple_reviews
-        )
-        if sp_google:
-            log.info(f"[{app_key}] [{lang_code}] 동기간 Google 샘플: {len(sp_google)}개 ({apple_date_from} ~ {apple_date_to})")
-        else:
-            log.info(f"[{app_key}] [{lang_code}] Apple 리뷰 없음 — 플랫폼 비교 생략")
-
-        # 시기별 분할 (출시일 있을 때만)
-        phases: dict = {}
-        if release_date:
-            phases = sampler.sample_phases(google_reviews, release_date)
-            for pk, pd in phases.items():
-                log.info(f"[{app_key}] [{lang_code}] 시기별 {pk}: {pd['count']}건 ({pd['date_from']} ~ {pd['date_to']}), 샘플 {len(pd['reviews'])}개, 긍정률 {pd.get('sentiment')}%")
-
-        # sentiment: 실제 평점 분포에서 계산
-        google_sentiment = calc_sentiment(google_reviews)
-        apple_sentiment = calc_sentiment(apple_reviews)
-        log.info(f"[{app_key}] [{lang_code}] 긍정도 계산 — Google {google_sentiment}% / Apple {apple_sentiment}%")
-
-        # 평점 분포
-        google_rating_dist = calc_rating_dist(google_reviews)
-        apple_rating_dist = calc_rating_dist(apple_reviews)
-        log.info(f"[{app_key}] [{lang_code}] 평점 분포 — Google {google_rating_dist} / Apple {apple_rating_dist}")
-
-        # 월별 평점 통계
-        monthly_stats = _calc_monthly_stats(google_reviews)
-        log.info(f"[{app_key}] [{lang_code}] 월별 통계: {len(monthly_stats)}개월 데이터")
-
-        result = gemini.analyze(
-            g_sample, a_sample,
-            mode="onboarding",
-            review_scope="전체 수집 리뷰",
-            same_period_google=sp_google,
-            phases=phases,
-            release_date=release_date,
-            monthly_stats=monthly_stats,
-            lang_code=lang_code,
-        )
-        result["google_sentiment"] = google_sentiment
-        result["apple_sentiment"] = apple_sentiment
-        result["sample_date_min"] = date_min
-        result["sample_date_max"] = date_max
-        result["google_rating_dist"] = google_rating_dist
-        result["apple_rating_dist"] = apple_rating_dist
-        result["lang_code"] = lang_code
-
-        # 분석 저장
-        analysis_id = asheet.save_analysis(ss_id, result)
-        log.info(f"[{app_key}] [{lang_code}] 분석 저장: {analysis_id}")
-        any_saved = True
-
-        # 일일 사용량 증가
-        try:
-            new_usage = master.increment_daily_ai_usage()
-            log.info(f"[{app_key}] [{lang_code}] 일일 AI 분석 사용량: {new_usage}회")
-        except Exception as e:
-            log.warning(f"[{app_key}] [{lang_code}] 일일 사용량 증가 실패 (무시, 계속 진행): {e}")
-
-    if not any_saved:
-        log.warning(f"[{app_key}] 모든 언어 샘플 부족 — pending_analysis=FALSE로 변경")
+    # 일일 사용량 증가 (실패해도 분석 완료 처리는 계속)
+    try:
+        new_usage = master.increment_daily_ai_usage()
+        log.info(f"[{app_key}] 일일 AI 분석 사용량: {new_usage}회")
+    except Exception as e:
+        log.warning(f"[{app_key}] 일일 사용량 증가 실패 (무시, 계속 진행): {e}")
 
     # pending_analysis=FALSE 는 반드시 설정 (재시도 포함)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
