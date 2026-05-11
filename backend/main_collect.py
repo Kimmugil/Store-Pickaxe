@@ -26,6 +26,12 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+_LANG_COMBOS = [
+    {"lang": "ko", "country": "kr"},
+    {"lang": "en", "country": "us"},
+    {"lang": "zh_TW", "country": "tw"},
+]
+
 
 def process_app(app: dict, mode: str) -> None:
     app_key = app["app_key"]
@@ -47,49 +53,51 @@ def process_app(app: dict, mode: str) -> None:
 
     # ── Google Play ──────────────────────────────────────────────
     if google_pkg:
-        try:
-            existing_ids = asheet.get_existing_review_ids(ss_id, "google")
+        for combo in _LANG_COMBOS:
+            lang, country = combo["lang"], combo["country"]
+            try:
+                existing_ids = asheet.get_existing_review_ids(ss_id, "google")
+                if mode == "onboarding":
+                    reviews = gc.collect_reviews(google_pkg, existing_ids, max_pages=50, country=country, lang=lang)
+                else:
+                    reviews = gc.collect_reviews(google_pkg, existing_ids, max_pages=10, country=country, lang=lang)
+                added = asheet.save_google_reviews(ss_id, reviews)
+                google_added += added
+                any_success = True
+                log.info(f"[{app_key}] Google [{lang}] +{added}개")
+            except Exception as e:
+                log.error(f"[{app_key}] Google [{lang}] 수집 실패: {e}")
+            time.sleep(cfg.collect_delay())
 
-            if mode == "onboarding":
-                # 전체 수집: 기존 ID만 제외, 페이지 제한 없음
-                reviews = gc.collect_reviews(google_pkg, existing_ids, max_pages=50)
-            else:
-                # 신규 수집: 연속 기존 리뷰 감지 시 조기 종료
-                reviews = gc.collect_reviews(google_pkg, existing_ids, max_pages=10)
-
-            google_added = asheet.save_google_reviews(ss_id, reviews)
-            any_success = True
-            log.info(f"[{app_key}] Google +{google_added}개")
-
-            # 현재 평점 조회
+        # 현재 평점 조회 (한번만)
+        if google_pkg:
             try:
                 info = gc.get_current_rating(google_pkg)
                 google_rating = str(info.get("rating", ""))
             except Exception as e:
                 log.warning(f"[{app_key}] Google 평점 조회 실패: {e}")
 
-        except Exception as e:
-            log.error(f"[{app_key}] Google 수집 실패: {e}")
-
-        time.sleep(cfg.collect_delay())
-
     # ── App Store ────────────────────────────────────────────────
     if apple_id:
-        try:
-            existing_ids = asheet.get_existing_review_ids(ss_id, "apple")
-            reviews = ac.collect_reviews(apple_id, existing_ids)
-            apple_added = asheet.save_apple_reviews(ss_id, reviews)
-            any_success = True
-            log.info(f"[{app_key}] Apple +{apple_added}개")
-
+        for combo in _LANG_COMBOS:
+            lang, country = combo["lang"], combo["country"]
             try:
-                info = ac.get_current_rating(apple_id)
-                apple_rating = str(info.get("rating", ""))
+                existing_ids = asheet.get_existing_review_ids(ss_id, "apple")
+                reviews = ac.collect_reviews(apple_id, existing_ids, country=country)
+                added = asheet.save_apple_reviews(ss_id, reviews)
+                apple_added += added
+                any_success = True
+                log.info(f"[{app_key}] Apple [{lang}] +{added}개")
             except Exception as e:
-                log.warning(f"[{app_key}] Apple 평점 조회 실패: {e}")
+                log.error(f"[{app_key}] Apple [{lang}] 수집 실패: {e}")
 
-        except Exception as e:
-            log.error(f"[{app_key}] Apple 수집 실패: {e}")
+            # Apple 평점은 한 번만 조회
+            if lang == "ko":
+                try:
+                    info = ac.get_current_rating(apple_id)
+                    apple_rating = str(info.get("rating", ""))
+                except Exception as e:
+                    log.warning(f"[{app_key}] Apple 평점 조회 실패: {e}")
 
     if not any_success:
         log.error(f"[{app_key}] 모든 플랫폼 수집 실패")

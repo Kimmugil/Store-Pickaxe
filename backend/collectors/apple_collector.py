@@ -27,6 +27,14 @@ _UA = (
 )
 _HEADERS = {"User-Agent": _UA}
 
+_COUNTRY_LANG_CODE = {"kr": "ko", "us": "en", "tw": "zh_TW"}
+_COUNTRY_LANG_PARAM = {"kr": "ko", "us": "en", "tw": "zh-Hant"}
+_COUNTRY_ACCEPT_LANG = {
+    "kr": "ko-KR,ko;q=0.9,en;q=0.8",
+    "us": "en-US,en;q=0.9",
+    "tw": "zh-TW,zh;q=0.9,en;q=0.8",
+}
+
 _log = _logging.getLogger(__name__)
 
 
@@ -121,7 +129,7 @@ def _get_amp_token(app_id: str, country: str = "kr") -> str:
             browser = pw.chromium.launch(headless=True)
             ctx = browser.new_context(
                 user_agent=_UA,
-                extra_http_headers={"Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8"},
+                extra_http_headers={"Accept-Language": _COUNTRY_ACCEPT_LANG.get(country, "en-US,en;q=0.9")},
             )
             page = ctx.new_page()
 
@@ -181,6 +189,7 @@ def _collect_via_amp(
     country: str,
 ) -> list[dict]:
     """AMP API로 리뷰 수집. offset 기반 페이지네이션."""
+    lang_code = _COUNTRY_LANG_CODE.get(country, "ko")
     headers = {
         "Authorization": f"Bearer {token}",
         "Origin": "https://apps.apple.com",
@@ -194,7 +203,7 @@ def _collect_via_amp(
         try:
             resp = requests.get(
                 _AMP_REVIEWS.format(country=country, app_id=app_id),
-                params={"l": "ko", "offset": offset, "limit": limit, "platform": "web"},
+                params={"l": _COUNTRY_LANG_PARAM.get(country, "en"), "offset": offset, "limit": limit, "platform": "web"},
                 headers=headers,
                 timeout=15,
             )
@@ -217,7 +226,7 @@ def _collect_via_amp(
             if not rid or rid in existing_ids:
                 continue
             attr = r.get("attributes", {})
-            review = _normalize_amp_review(rid, attr)
+            review = _normalize_amp_review(rid, attr, lang_code)
             if review:
                 collected.append(review)
                 existing_ids.add(rid)
@@ -238,7 +247,7 @@ def _collect_via_amp(
     return collected
 
 
-def _normalize_amp_review(rid: str, attr: dict) -> Optional[dict]:
+def _normalize_amp_review(rid: str, attr: dict, lang_code: str = "ko") -> Optional[dict]:
     raw_date = attr.get("date", "")
     try:
         reviewed_at = datetime.fromisoformat(
@@ -254,6 +263,7 @@ def _normalize_amp_review(rid: str, attr: dict) -> Optional[dict]:
         "content": attr.get("body", ""),
         "app_version": attr.get("appVersionString", ""),
         "reviewed_at": reviewed_at,
+        "lang_code": lang_code,
     }
 
 
@@ -265,6 +275,7 @@ def _collect_via_rss(
     max_pages: int = 10,
     country: str = "kr",
 ) -> list[dict]:
+    lang_code = _COUNTRY_LANG_CODE.get(country, "ko")
     collected = []
 
     for page in range(1, max_pages + 1):
@@ -301,7 +312,7 @@ def _collect_via_rss(
             rid = _extract_id(entry)
             if not rid or rid in existing_ids:
                 continue
-            review = _normalize_rss_review(entry, rid)
+            review = _normalize_rss_review(entry, rid, lang_code)
             if review:
                 collected.append(review)
                 existing_ids.add(rid)
@@ -335,7 +346,7 @@ def _extract(entry: dict, *keys, default="") -> str:
     return str(node) if node else default
 
 
-def _normalize_rss_review(entry: dict, rid: str = "") -> Optional[dict]:
+def _normalize_rss_review(entry: dict, rid: str = "", lang_code: str = "ko") -> Optional[dict]:
     if not rid:
         rid = _extract_id(entry)
     if not rid:
@@ -361,6 +372,7 @@ def _normalize_rss_review(entry: dict, rid: str = "") -> Optional[dict]:
         "content": _extract(entry, "content", "label"),
         "app_version": _extract(entry, "im:version", "label"),
         "reviewed_at": reviewed_at,
+        "lang_code": lang_code,
     }
 
 

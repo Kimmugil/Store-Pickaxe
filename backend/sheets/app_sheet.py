@@ -26,10 +26,12 @@ COLLECTION_LOG_HEADERS = [
 GOOGLE_REVIEW_HEADERS = [
     "review_id", "rating", "content",
     "app_version", "reviewed_at", "thumbs_up", "collected_at",
+    "lang_code",   # 수집 언어 코드 (ko/en/zh_TW)
 ]
 APPLE_REVIEW_HEADERS = [
     "review_id", "rating", "title", "content",
     "app_version", "reviewed_at", "collected_at",
+    "lang_code",   # 수집 국가/언어 코드 (ko/en/zh_TW)
 ]
 ANALYSIS_HEADERS = [
     "analysis_id", "created_at", "mode", "review_scope",
@@ -42,6 +44,7 @@ ANALYSIS_HEADERS = [
     "google_phase_launch", "google_phase_growth", "google_phase_stable",
     "google_rating_dist", "apple_rating_dist",   # 전체 수집 리뷰 평점 분포
     "categories",   # 카테고리별 긍정/부정 비율 JSON [{name, positive_pct, negative_pct}]
+    "lang_code",   # 분석 언어 코드 (ko/en/zh_TW). 미설정 시 ko로 처리
 ]
 
 
@@ -137,6 +140,7 @@ def save_google_reviews(spreadsheet_id: str, reviews: list[dict]) -> int:
             r.get("reviewed_at", ""),
             r.get("thumbs_up", 0),
             now,
+            r.get("lang_code", "ko"),
         ]
         for r in reviews
     ]
@@ -159,6 +163,7 @@ def save_apple_reviews(spreadsheet_id: str, reviews: list[dict]) -> int:
             r.get("app_version", ""),
             r.get("reviewed_at", ""),
             now,
+            r.get("lang_code", "ko"),
         ]
         for r in reviews
     ]
@@ -166,16 +171,22 @@ def save_apple_reviews(spreadsheet_id: str, reviews: list[dict]) -> int:
     return len(rows)
 
 
-def get_google_reviews(spreadsheet_id: str) -> list[dict]:
+def get_google_reviews(spreadsheet_id: str, lang_code: Optional[str] = None) -> list[dict]:
     ss = _open(spreadsheet_id)
     ws = _ensure(ss, "GOOGLE_REVIEWS", GOOGLE_REVIEW_HEADERS)
-    return ws.get_all_records()
+    records = ws.get_all_records()
+    if lang_code is not None:
+        records = [r for r in records if (r.get("lang_code") or "ko") == lang_code]
+    return records
 
 
-def get_apple_reviews(spreadsheet_id: str) -> list[dict]:
+def get_apple_reviews(spreadsheet_id: str, lang_code: Optional[str] = None) -> list[dict]:
     ss = _open(spreadsheet_id)
     ws = _ensure(ss, "APPLE_REVIEWS", APPLE_REVIEW_HEADERS)
-    return ws.get_all_records()
+    records = ws.get_all_records()
+    if lang_code is not None:
+        records = [r for r in records if (r.get("lang_code") or "ko") == lang_code]
+    return records
 
 
 # ─── 분석 결과 ───────────────────────────────────────────────────
@@ -212,6 +223,7 @@ def save_analysis(spreadsheet_id: str, result: dict) -> str:
         json.dumps(result.get("google_rating_dist", {}), ensure_ascii=False),
         json.dumps(result.get("apple_rating_dist", {}), ensure_ascii=False),
         json.dumps(result.get("categories", []), ensure_ascii=False),
+        result.get("lang_code", "ko"),
     ], value_input_option="USER_ENTERED")
     return analysis_id
 

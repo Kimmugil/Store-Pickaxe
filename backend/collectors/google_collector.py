@@ -122,7 +122,7 @@ def collect_reviews(
                 consecutive_known += 1
             else:
                 consecutive_known = 0
-                collected.append(_normalize_review(r))
+                collected.append(_normalize_review(r, lang_code=lang))
 
         if consecutive_known >= EARLY_STOP_THRESHOLD:
             break
@@ -150,7 +150,7 @@ def _normalize_search_result(r: dict) -> dict:
     }
 
 
-def _normalize_review(r: dict) -> dict:
+def _normalize_review(r: dict, lang_code: str = "ko") -> dict:
     at = r.get("at")
     if isinstance(at, datetime):
         reviewed_at = at.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -164,4 +164,5 @@ def _normalize_review(r: dict) -> dict:
         "app_version": r.get("reviewCreatedVersion", ""),
         "reviewed_at": reviewed_at,
         "thumbs_up": r.get("thumbsUpCount", 0),
+        "lang_code": lang_code,
     }

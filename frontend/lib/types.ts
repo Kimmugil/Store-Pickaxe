@@ -76,6 +76,7 @@ export interface Analysis {
   google_rating_dist?: Record<string, number>;  // 전체 수집 리뷰 평점 분포
   apple_rating_dist?: Record<string, number>;
   categories?: CategoryData[];  // 카테고리별 긍정/부정 비율
+  lang_code?: string;           // 분석 언어 코드 ("ko" | "en" | "zh_TW")
 }
 
 export interface Review {

@@ -19,6 +19,7 @@ export default function AppDetailPage() {
   const [data, setData] = useState<AppDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [logsOpen, setLogsOpen] = useState(false);
+  const [activeLang, setActiveLang] = useState("ko");
   const [limitData, setLimitData] = useState<{ count: number; limit: number } | null>(null);
   const [limitPopupDismissed, setLimitPopupDismissed] = useState(false);
 
@@ -48,8 +49,29 @@ export default function AppDetailPage() {
     </div>
   );
 
+  const LANG_TABS = [
+    { code: "ko", flag: "🇰🇷", label: "한국" },
+    { code: "en", flag: "🇺🇸", label: "영어" },
+    { code: "zh_TW", flag: "🇹🇼", label: "대만" },
+  ];
+
+  function getLangCode(a: Analysis): string {
+    return a.lang_code || "ko";
+  }
+
   const { meta, logs, analyses } = data;
   const sortedAnalyses = [...analyses].sort((a, b) => (b.created_at > a.created_at ? 1 : -1));
+
+  // Determine which lang tabs have data
+  const availableLangs = new Set(sortedAnalyses.map(getLangCode));
+  const visibleTabs = LANG_TABS.filter((t) => availableLangs.has(t.code));
+  const showLangTabs = visibleTabs.length > 1;
+
+  // Filter analyses by active language tab
+  const filteredAnalyses = showLangTabs
+    ? sortedAnalyses.filter((a) => getLangCode(a) === activeLang)
+    : sortedAnalyses;
+
   const limitExceeded = meta.pending_analysis && sortedAnalyses.length === 0
     && limitData !== null && limitData.count >= limitData.limit;
 
@@ -206,6 +228,27 @@ export default function AppDetailPage() {
           )}
         </div>
 
+        {/* 언어 탭 */}
+        {showLangTabs && (
+          <div className="flex gap-2 flex-wrap">
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab.code}
+                onClick={() => setActiveLang(tab.code)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
+                style={
+                  activeLang === tab.code
+                    ? { background: "#1A1A1A", color: "#FFFFFF", border: "1.5px solid #1A1A1A" }
+                    : { background: "#F0EFEC", color: "#4A4A4A", border: "1.5px solid #E2E8F0" }
+                }
+              >
+                <span>{tab.flag}</span>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {sortedAnalyses.length === 0 ? (
           <div
             className="py-10 text-center rounded-xl"
@@ -223,7 +266,7 @@ export default function AppDetailPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {sortedAnalyses.map((analysis) => (
+            {filteredAnalyses.map((analysis) => (
               <div
                 key={analysis.analysis_id}
                 className="rounded-xl p-4 space-y-3"

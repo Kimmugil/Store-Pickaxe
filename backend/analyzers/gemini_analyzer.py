@@ -40,6 +40,7 @@ def analyze(
     phases: dict | None = None,
     release_date: str = "",
     monthly_stats: list[dict] | None = None,
+    lang_code: str = "ko",
 ) -> dict:
     """
     3개의 독립 Gemini 호출로 분석 실행 후 결과 병합.
@@ -49,6 +50,7 @@ def analyze(
         same_period_google: 플랫폼 비교용 동기간 Google 샘플
         phases: 시기별 분석 데이터 {"launch": {reviews, count, ...}, ...}
         release_date: 출시일 (YYYY-MM-DD)
+        lang_code: 리뷰 언어 코드 (ko/en/zh_TW)
     Returns:
         dict — sentiment 필드 없음 (caller가 calc_sentiment로 직접 계산해서 주입)
     """
@@ -59,14 +61,14 @@ def analyze(
         raise ValueError("분석할 리뷰가 없습니다.")
 
     # Call #1: 종합 요약
-    summary_result = _analyze_summary(google_reviews, apple_reviews, review_scope, monthly_stats or [])
+    summary_result = _analyze_summary(google_reviews, apple_reviews, review_scope, monthly_stats or [], lang_code=lang_code)
 
     # Call #2: 플랫폼 비교 (동기간 샘플이 있을 때만)
     sp = same_period_google or []
-    platform_result = _analyze_platform(sp, apple_reviews) if (sp and apple_reviews) else {}
+    platform_result = _analyze_platform(sp, apple_reviews, lang_code=lang_code) if (sp and apple_reviews) else {}
 
     # Call #3: 시기별 트렌드 (phases 데이터가 있을 때만)
-    phase_result = _analyze_phases(phases, release_date) if phases else {}
+    phase_result = _analyze_phases(phases, release_date, lang_code=lang_code) if phases else {}
 
     # ── 결과 병합 ────────────────────────────────────────────
     result: dict = {**summary_result}
@@ -119,11 +121,30 @@ def analyze(
 
 # ── Call #1: 종합 요약 ────────────────────────────────────────────
 
+_LANG_LABELS = {
+    "en": "영어권(미국)",
+    "zh_TW": "대만(번체 중국어)",
+    "ko": "한국어",
+}
+
+
+def _lang_note(lang_code: str) -> str:
+    """비한국어 리뷰일 때 Gemini에게 전달할 언어 안내 문구."""
+    if lang_code == "ko":
+        return ""
+    label = _LANG_LABELS.get(lang_code, lang_code)
+    return (
+        f"\n※ 아래 리뷰는 {label} 리뷰입니다. "
+        "리뷰 원문은 해당 언어로 되어 있으나, 분석 결과와 example_reviews 인용은 반드시 한국어로만 응답하세요."
+    )
+
+
 def _analyze_summary(
     google_reviews: list[dict],
     apple_reviews: list[dict],
     review_scope: str,
     monthly_stats: list[dict],
+    lang_code: str = "ko",
 ) -> dict:
     g_lines = [_fmt_review(r, "Google") for r in google_reviews]
     a_lines = [_fmt_review(r, "Apple") for r in apple_reviews]
@@ -140,7 +161,9 @@ def _analyze_summary(
             + "\n".join(lines)
         )
 
-    prompt = f"""당신은 모바일 게임 리뷰 분석 전문가입니다.
+    lang_note = _lang_note(lang_code)
+
+    prompt = f"""당신은 모바일 게임 리뷰 분석 전문가입니다.{lang_note}
 
 ## 분석 대상 리뷰 [{review_scope}] (Google {len(google_reviews)}개 + Apple {len(apple_reviews)}개)
 (종합 요약 · 주요 불만/칭찬 · 키워드 분석 기반)
@@ -190,12 +213,15 @@ def _analyze_summary(
 def _analyze_platform(
     same_period_google: list[dict],
     apple_reviews: list[dict],
+    lang_code: str = "ko",
 ) -> dict:
     sp_lines = [_fmt_review(r, "Google") for r in same_period_google]
     a_lines = [_fmt_review(r, "Apple") for r in apple_reviews]
     all_lines = "\n".join(sp_lines + a_lines)
 
-    prompt = f"""당신은 모바일 게임 리뷰 분석 전문가입니다.
+    lang_note = _lang_note(lang_code)
+
+    prompt = f"""당신은 모바일 게임 리뷰 분석 전문가입니다.{lang_note}
 
 ## 동기간 플랫폼 비교 리뷰 (Google {len(same_period_google)}개 + Apple {len(apple_reviews)}개)
 ※ App Store는 최근 약 500건만 수집 가능합니다. Apple 수집 기간과 동일한 Google Play 리뷰만 사용합니다.
@@ -233,6 +259,7 @@ def _analyze_platform(
 def _analyze_phases(
     phases: dict,
     release_date: str,
+    lang_code: str = "ko",
 ) -> dict:
     phase_labels = {
         "launch": "출시 초반 (0~30일)",
@@ -275,7 +302,9 @@ def _analyze_phases(
 
     json_template = "{\n" + ",\n".join(json_fields) + "\n}"
 
-    prompt = f"""당신은 모바일 게임 리뷰 분석 전문가입니다.
+    lang_note = _lang_note(lang_code)
+
+    prompt = f"""당신은 모바일 게임 리뷰 분석 전문가입니다.{lang_note}
 
 ## Google Play 시기별 리뷰 (출시일: {release_date})
 각 시기의 평균 평점과 긍정률이 헤더에 표시됩니다. 이를 참고하여 해당 시기 유저 반응 트렌드를 분석하세요.

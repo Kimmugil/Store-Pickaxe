@@ -69,6 +69,13 @@ function ReportContent() {
   );
 
   const { analysis, meta, google_reviews, apple_reviews, all_analyses = [] } = data;
+
+  const LANG_DISPLAY: Record<string, { flag: string; label: string }> = {
+    ko: { flag: "🇰🇷", label: "한국어" },
+    en: { flag: "🇺🇸", label: "영어권" },
+    zh_TW: { flag: "🇹🇼", label: "대만" },
+  };
+  const langInfo = LANG_DISPLAY[analysis.lang_code || "ko"] || LANG_DISPLAY["ko"];
   // all_analyses는 최신순 정렬 (newest first), 현재 분석 제외한 이전 리포트
   const otherAnalyses = all_analyses.filter((a) => a.analysis_id !== analysisId);
   const gCollected = computeAvgFromDist(analysis.google_rating_dist);
@@ -106,8 +113,14 @@ function ReportContent() {
             )}
             <div className="flex-1 min-w-0">
               <h1 className="font-black text-xl" style={{ color: "#1A1A1A", letterSpacing: "-0.02em" }}>{meta.app_name}</h1>
-              <p className="text-xs mt-0.5 flex flex-wrap gap-x-3" style={{ color: "#9CA3AF" }}>
+              <p className="text-xs mt-0.5 flex flex-wrap gap-x-3 items-center" style={{ color: "#9CA3AF" }}>
                 <span>분석 {formatDateTime(analysis.created_at)}</span>
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
+                  style={{ background: "#F0EFEC", border: "1px solid #E2E8F0", color: "#4A4A4A" }}
+                >
+                  {langInfo.flag} {langInfo.label}
+                </span>
                 <span>샘플 {(analysis.sample_count_google + analysis.sample_count_apple).toLocaleString()}건</span>
                 {meta.release_date && <span>출시 {meta.release_date}</span>}
               </p>

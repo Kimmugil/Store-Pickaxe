@@ -11,7 +11,9 @@ export async function GET() {
         if (!app.spreadsheet_id) return { app, latestAnalysis: null };
         const analyses = await getAppAnalyses(app.spreadsheet_id).catch(() => [] as Analysis[]);
         const sorted = [...analyses].sort((a, b) => (b.created_at > a.created_at ? 1 : -1));
-        return { app, latestAnalysis: sorted[0] ?? null };
+        // Prefer the most recent "ko" analysis; fall back to any most recent
+        const koAnalysis = sorted.find((a) => (a.lang_code || "ko") === "ko") ?? null;
+        return { app, latestAnalysis: koAnalysis ?? sorted[0] ?? null };
       })
     );
 
