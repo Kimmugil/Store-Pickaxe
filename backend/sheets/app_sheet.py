@@ -62,11 +62,31 @@ def _open(spreadsheet_id: str) -> gspread.Spreadsheet:
 
 def _ensure(ss: gspread.Spreadsheet, title: str, headers: list[str]) -> gspread.Worksheet:
     try:
-        return ss.worksheet(title)
+        ws = ss.worksheet(title)
+        # 기존 시트의 헤더에 새 컬럼이 추가된 경우 자동 마이그레이션
+        existing = ws.row_values(1)
+        if existing and len(existing) < len(headers):
+            missing = headers[len(existing):]
+            # 기존 마지막 헤더 다음 컬럼부터 추가
+            start_col = len(existing) + 1
+            ws.update(
+                [[h] for h in missing],
+                range_name=f"{_col_letter(start_col)}1",
+            )
+        return ws
     except gspread.WorksheetNotFound:
         ws = ss.add_worksheet(title, rows=50000, cols=max(len(headers), 10))
         ws.append_row(headers)
         return ws
+
+
+def _col_letter(n: int) -> str:
+    """1-based 컬럼 번호 → A, B, ..., Z, AA, AB, ... 변환."""
+    result = ""
+    while n > 0:
+        n, remainder = divmod(n - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
 
 
 # ─── 스프레드시트 초기화 ─────────────────────────────────────────
