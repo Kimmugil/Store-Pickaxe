@@ -204,8 +204,22 @@ def _analyze_platform(
 위 데이터를 분석하여 플랫폼별 고유 이슈를 다음 JSON 형식으로 응답하세요:
 
 {{
-  "platform_diff_google": [{{"title": "Google Play 고유 이슈 (15자 이내)", "description": "구체적 설명 (40자 이내)"}}, ...],
-  "platform_diff_apple": [{{"title": "App Store 고유 이슈 (15자 이내)", "description": "구체적 설명 (40자 이내)"}}, ...]
+  "platform_diff_google": [
+    {{
+      "title": "Google Play 고유 이슈 (15자 이내)",
+      "description": "구체적 설명 (40자 이내)",
+      "example_reviews": ["이 이슈를 잘 보여주는 Google Play 실제 리뷰 문장 발췌 (80자 이내)", "두 번째 발췌"]
+    }},
+    ...
+  ],
+  "platform_diff_apple": [
+    {{
+      "title": "App Store 고유 이슈 (15자 이내)",
+      "description": "구체적 설명 (40자 이내)",
+      "example_reviews": ["이 이슈를 잘 보여주는 App Store 실제 리뷰 문장 발췌 (80자 이내)", "두 번째 발췌"]
+    }},
+    ...
+  ]
 }}
 (각 2~3개, 없으면 [])
 

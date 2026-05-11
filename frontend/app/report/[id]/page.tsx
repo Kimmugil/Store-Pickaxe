@@ -21,8 +21,8 @@ interface MonthlyRatings {
   total_reviews: number;
 }
 
-// platform_diff 항목은 구형(string)과 신형({title, description}) 모두 지원
-type PlatformIssue = string | { title: string; description: string };
+// platform_diff 항목은 구형(string)과 신형({title, description, example_reviews?}) 모두 지원
+type PlatformIssue = string | { title: string; description: string; example_reviews?: string[] };
 
 type Tab = "summary" | "platform" | "phases" | "reviews";
 type TaggedReview = Review & { _platform: "google" | "apple" };
@@ -714,7 +714,12 @@ function IssueItem({ issue, color, reviews }: { issue: PlatformIssue; color: str
 
   const title = typeof issue === "string" ? issue : issue.title;
   const description = typeof issue === "string" ? "" : (issue.description || "");
-  const related = findRelatedReviews(title, description, reviews, 3);
+  const exampleReviews = typeof issue === "string" ? undefined : issue.example_reviews;
+
+  const hasExamples = exampleReviews && exampleReviews.length > 0;
+  const fallbackRelated = hasExamples ? [] : findRelatedReviews(title, description, reviews, 3);
+  const hasRelated = hasExamples || fallbackRelated.length > 0;
+  const count = hasExamples ? exampleReviews!.length : fallbackRelated.length;
 
   return (
     <div className="space-y-1">
@@ -727,27 +732,36 @@ function IssueItem({ issue, color, reviews }: { issue: PlatformIssue; color: str
           )}
         </div>
       </div>
-      {related.length > 0 && (
+      {hasRelated && (
         <div className="pl-3">
           <button
             onClick={() => setOpen((v) => !v)}
             className="flex items-center gap-1 text-xs"
             style={{ color: "#9CA3AF" }}
           >
-            관련 리뷰 {related.length}건
+            유저 리뷰 {count}건
             {open ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
           </button>
           {open && (
             <div className="mt-1.5 space-y-1.5">
-              {related.map((r) => (
-                <div key={r.review_id} className="pl-2 py-1.5 space-y-0.5" style={{ borderLeft: `2px solid ${color}30` }}>
-                  <div className="flex items-center gap-1.5">
-                    <StarRating rating={r.rating} size="xs" />
-                    {r.reviewed_at && <span className="text-xs" style={{ color: "#C4C4C4" }}>{formatDate(r.reviewed_at)}</span>}
-                  </div>
-                  <p className="text-xs leading-relaxed" style={{ color: "#6B7280" }}>{r.content}</p>
-                </div>
-              ))}
+              {hasExamples
+                ? exampleReviews!.map((quote, i) => (
+                    <div key={i} className="pl-2 py-1.5" style={{ borderLeft: `2px solid ${color}40` }}>
+                      <p className="text-xs leading-relaxed" style={{ color: "#4A4A4A" }}>
+                        &ldquo;{quote}&rdquo;
+                      </p>
+                    </div>
+                  ))
+                : fallbackRelated.map((r) => (
+                    <div key={r.review_id} className="pl-2 py-1.5 space-y-0.5" style={{ borderLeft: `2px solid ${color}30` }}>
+                      <div className="flex items-center gap-1.5">
+                        <StarRating rating={r.rating} size="xs" />
+                        {r.reviewed_at && <span className="text-xs" style={{ color: "#C4C4C4" }}>{formatDate(r.reviewed_at)}</span>}
+                      </div>
+                      <p className="text-xs leading-relaxed" style={{ color: "#6B7280" }}>{r.content}</p>
+                    </div>
+                  ))
+              }
             </div>
           )}
         </div>
