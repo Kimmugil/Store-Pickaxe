@@ -32,7 +32,7 @@ export default function HomePage() {
   useEffect(() => {
     fetch("/api/apps")
       .then((r) => r.ok ? r.json() : [])
-      .then((data) => setRecentApps(Array.isArray(data) ? data : []))
+      .then((data) => setRecentApps(Array.isArray(data) ? data.slice(-8) : []))
       .catch(() => {});
   }, []);
 
@@ -174,10 +174,21 @@ export default function HomePage() {
                 display: flex;
                 gap: 16px;
                 width: max-content;
-                padding: 4px 16px;
-                animation: marquee 30s linear infinite;
+                padding: 12px 16px;
+                animation: marquee 55s linear infinite;
               }
               .marquee-track:hover { animation-play-state: paused; }
+              .recent-card {
+                transition: transform 0.28s ease, margin 0.28s ease, box-shadow 0.28s ease;
+                position: relative;
+              }
+              .recent-card:hover {
+                transform: translateY(-10px);
+                margin-left: 10px;
+                margin-right: 10px;
+                box-shadow: 0 16px 40px rgba(0,0,0,0.14);
+                z-index: 10;
+              }
             `}</style>
             <div className="marquee-track">
               {[...recentApps, ...recentApps].map(({ app, latestAnalysis }, i) => (
@@ -409,7 +420,7 @@ function RecentCard({ app, analysis }: { app: AppMeta; analysis: Analysis | null
   return (
     <Link
       href={href}
-      className="flex-shrink-0 card-hover overflow-hidden"
+      className="recent-card flex-shrink-0 card-hover overflow-hidden"
       style={{ width: 380 }}
     >
       {/* 헤더 */}
