@@ -44,6 +44,7 @@ export interface PhaseData {
 export interface ComplaintPraise {
   title: string;
   description: string;
+  example_reviews?: string[];  // Gemini가 직접 발췌한 대표 리뷰 문장
 }
 
 export interface CategoryData {

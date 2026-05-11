@@ -373,12 +373,20 @@ function ComplaintPraiseItem({
   const [open, setOpen] = useState(false);
   const accentColor = type === "complaint" ? "#EF4444" : "#10B981";
 
-  const googleReviews = allReviews.filter((r) => r._platform === "google");
-  const appleReviews = allReviews.filter((r) => r._platform === "apple");
-  const related = [
-    ...findRelatedReviews(item.title, item.description, googleReviews, 3),
-    ...findRelatedReviews(item.title, item.description, appleReviews, 2),
-  ].slice(0, 5);
+  // 신형: Gemini가 직접 발췌한 example_reviews 우선 사용
+  // 구형 분석 호환: example_reviews 없으면 findRelatedReviews 폴백
+  const hasExamples = item.example_reviews && item.example_reviews.length > 0;
+  const fallbackRelated = hasExamples ? [] : (() => {
+    const googleReviews = allReviews.filter((r) => r._platform === "google");
+    const appleReviews = allReviews.filter((r) => r._platform === "apple");
+    return [
+      ...findRelatedReviews(item.title, item.description, googleReviews, 3),
+      ...findRelatedReviews(item.title, item.description, appleReviews, 2),
+    ].slice(0, 5);
+  })();
+
+  const hasRelated = hasExamples || fallbackRelated.length > 0;
+  const count = hasExamples ? item.example_reviews!.length : fallbackRelated.length;
 
   return (
     <div className="rounded-xl p-4 space-y-2.5" style={{ background: "#FFFFFF", border: "1.5px solid #E2E8F0" }}>
@@ -393,36 +401,45 @@ function ComplaintPraiseItem({
         <p className="text-xs leading-relaxed pl-4" style={{ color: "#6B7280" }}>{item.description}</p>
       )}
 
-      {related.length > 0 && (
+      {hasRelated && (
         <div className="pl-4">
           <button
             onClick={() => setOpen((v) => !v)}
             className="flex items-center gap-1 text-xs font-medium"
             style={{ color: accentColor }}
           >
-            관련 리뷰 {related.length}건
+            유저 리뷰 {count}건
             {open ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
           </button>
           {open && (
             <div className="mt-2 space-y-2">
-              {related.map((r) => (
-                <div key={r.review_id} className="pl-3 py-2 space-y-1" style={{ borderLeft: `2px solid ${accentColor}30` }}>
-                  <div className="flex items-center gap-2">
-                    <StarRating rating={r.rating} size="xs" />
-                    <span className="text-xs font-bold px-1.5 py-0.5 rounded-full"
-                      style={{
-                        background: r._platform === "google" ? "#EBF3FF" : "#F0EFEC",
-                        color: r._platform === "google" ? "#4285F4" : "#1A1A1A",
-                      }}>
-                      {r._platform === "google" ? "G" : "A"}
-                    </span>
-                    {r.reviewed_at && (
-                      <span className="text-xs" style={{ color: "#C4C4C4" }}>{formatDate(r.reviewed_at)}</span>
-                    )}
-                  </div>
-                  <p className="text-xs leading-relaxed" style={{ color: "#6B7280" }}>{r.content}</p>
-                </div>
-              ))}
+              {hasExamples
+                ? item.example_reviews!.map((quote, i) => (
+                    <div key={i} className="pl-3 py-2" style={{ borderLeft: `2px solid ${accentColor}40` }}>
+                      <p className="text-xs leading-relaxed" style={{ color: "#4A4A4A" }}>
+                        &ldquo;{quote}&rdquo;
+                      </p>
+                    </div>
+                  ))
+                : fallbackRelated.map((r) => (
+                    <div key={r.review_id} className="pl-3 py-2 space-y-1" style={{ borderLeft: `2px solid ${accentColor}30` }}>
+                      <div className="flex items-center gap-2">
+                        <StarRating rating={r.rating} size="xs" />
+                        <span className="text-xs font-bold px-1.5 py-0.5 rounded-full"
+                          style={{
+                            background: r._platform === "google" ? "#EBF3FF" : "#F0EFEC",
+                            color: r._platform === "google" ? "#4285F4" : "#1A1A1A",
+                          }}>
+                          {r._platform === "google" ? "G" : "A"}
+                        </span>
+                        {r.reviewed_at && (
+                          <span className="text-xs" style={{ color: "#C4C4C4" }}>{formatDate(r.reviewed_at)}</span>
+                        )}
+                      </div>
+                      <p className="text-xs leading-relaxed" style={{ color: "#6B7280" }}>{r.content}</p>
+                    </div>
+                  ))
+              }
             </div>
           )}
         </div>
