@@ -12,7 +12,7 @@ from backend.config import sample_google_count, sample_apple_count
 
 def _filter_reviews(reviews: list[dict]) -> list[dict]:
     """20자 미만 내용 제거."""
-    return [r for r in reviews if len((r.get("content") or "").strip()) >= 20]
+    return [r for r in reviews if len(str(r.get("content") or "").strip()) >= 20]
 
 
 def _weighted_sample(reviews: list[dict], target: int) -> list[dict]:
